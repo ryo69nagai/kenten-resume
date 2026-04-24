@@ -2296,7 +2296,6 @@ function drawCS(){
       for(var j=0;j<catsDef.length;j++)h+='<option value="'+catsDef[j][0]+'"'+(w.jobCat===catsDef[j][0]?' selected':'')+'>'+catsDef[j][1]+'</option>';
       h+='</select></div>';
       h+='</div>';
-      h+='<div class="form-group"><label>担当職種（自由記入）</label><input class="cw-jobtitle" value="'+esc(w.jobTitle||'')+'" oninput="saveCS()" placeholder="例: 建築施工管理 / 意匠設計"></div>';
       h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:#2BA84A">▶ 会社情報（任意）</summary>';
       h+='<div class="form-group"><label>事業内容</label><input class="cw-business" value="'+esc(w.business||'')+'" oninput="saveCS()" placeholder="例: 注文住宅の設計・施工"></div>';
       h+='<div class="inline-group">';
@@ -2640,11 +2639,11 @@ function buildWorkBlockChunks(w,isLast){
     chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;line-height:1.4"><strong>業務概要:</strong> '+esc(w.bizSummary).replace(/\n/g,' ')+'</div>',h:bsH,type:'detail'});
   }
   /* ③ 職務内容 */
-  var jcParts=[];
-  if(w.jobContentChecks&&w.jobContentChecks.length)jcParts.push(w.jobContentChecks.map(esc).join('、'));
-  if(w.jobContentFree)jcParts.push(esc(w.jobContentFree));
-  if(jcParts.length){
-    var jcText=jcParts.join(' ／ ');
+  var jcItems2=[];
+  if(w.jobContentChecks&&w.jobContentChecks.length)for(var _jc2=0;_jc2<w.jobContentChecks.length;_jc2++)jcItems2.push(esc(w.jobContentChecks[_jc2]));
+  if(w.jobContentFree)jcItems2.push(esc(w.jobContentFree));
+  if(jcItems2.length){
+    var jcText=jcItems2.join('、');
     var jcH=chWrapHeight('職務内容: '+jcText,11.5,1.4,46)+1;
     chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;line-height:1.4"><strong>職務内容:</strong> '+jcText+'</div>',h:jcH,type:'detail'});
   }
@@ -2727,11 +2726,11 @@ function buildWorkBlockHTML(w,isLast){
     h+='<div style="font-size:13px;margin-top:3px;line-height:1.7"><strong>業務概要:</strong> '+esc(w.bizSummary).replace(/\n/g,' ')+'</div>';
   }
   /* ③ 職務内容 */
-  var jcParts=[];
-  if(w.jobContentChecks&&w.jobContentChecks.length)jcParts.push(w.jobContentChecks.map(esc).join('、'));
-  if(w.jobContentFree)jcParts.push(esc(w.jobContentFree));
-  if(jcParts.length){
-    h+='<div style="font-size:13px;margin-top:3px;line-height:1.7"><strong>職務内容:</strong> '+jcParts.join(' ／ ')+'</div>';
+  var jcItems=[];
+  if(w.jobContentChecks&&w.jobContentChecks.length)for(var _jc=0;_jc<w.jobContentChecks.length;_jc++)jcItems.push(esc(w.jobContentChecks[_jc]));
+  if(w.jobContentFree)jcItems.push(esc(w.jobContentFree));
+  if(jcItems.length){
+    h+='<div style="font-size:13px;margin-top:3px;line-height:1.7"><strong>職務内容:</strong> '+jcItems.join('、')+'</div>';
   }
   /* ④ 工事規模/構造 */
   var ssParts=[];
