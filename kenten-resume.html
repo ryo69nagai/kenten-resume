@@ -1896,7 +1896,7 @@ function saveCS(){
       W.to=g('cw-to');
       W.employment=g('cw-employment');
       W.jobCat=g('cw-jobcat');
-      W.jobTitle=g('cw-jobtitle');
+      if(W.jobCat==='other')W.jobCatFree=g('cw-jobcat-free');
       W.industry=g('cw-industry');
       W.business=g('cw-business');
       W.capital=g('cw-capital');
@@ -1960,6 +1960,8 @@ function saveCS(){
 function autoSummary(){
   if(!CD.works.length)return '';
   var catName={sekou:'施工管理',sekkei:'設計',cad:'CAD・BIM',eigyo:'営業',jimu:'事務',other:'建設業務'};
+  /* other の自由入力名があれば上書き */
+  for(var _cn=0;_cn<CD.works.length;_cn++){if(CD.works[_cn].jobCat==='other'&&CD.works[_cn].jobCatFree){catName.other=CD.works[_cn].jobCatFree;break;}}
   /* 古い順（ASC） */
   var sorted=CD.works.slice().filter(function(w){return w.company;}).sort(function(a,b){return (a.from||'').localeCompare(b.from||'');});
   if(!sorted.length)return '';
@@ -2280,7 +2282,7 @@ function drawCS(){
     for(var i=0;i<CD.works.length;i++){
       var w=CD.works[i];
       var cat=w.jobCat||'other';
-      var catLbl={sekou:'施工管理',sekkei:'設計',cad:'CAD系',eigyo:'営業',other:'その他'}[cat];
+      var catLbl=(cat==='other'&&w.jobCatFree)?w.jobCatFree:{sekou:'施工管理',sekkei:'設計',cad:'CAD系',eigyo:'営業',other:'その他'}[cat];
       h+='<div class="entry-block cw-work cw-qblock" data-idx="'+i+'" style="border:2px solid #c8e6c9">';
       h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong style="color:#2BA84A">職歴 '+(i+1)+' '+(i===0?'（一番古い）':(i===CD.works.length-1?'（最新）':''))+'</strong>';
       if(CD.works.length>1)h+='<button type="button" onclick="removeCWork('+i+')" style="background:none;border:none;color:#c00;cursor:pointer;font-size:12px">削除</button>';
@@ -2297,7 +2299,9 @@ function drawCS(){
       h+='</select></div>';
       h+='<div class="form-group"><label>職種カテゴリ ⭐</label><select class="cw-jobcat" onchange="onJobCatChange('+i+',this.value)">';
       for(var j=0;j<catsDef.length;j++)h+='<option value="'+catsDef[j][0]+'"'+(w.jobCat===catsDef[j][0]?' selected':'')+'>'+catsDef[j][1]+'</option>';
-      h+='</select></div>';
+      h+='</select>';
+      if(cat==='other')h+='<input class="cw-jobcat-free" value="'+esc(w.jobCatFree||'')+'" placeholder="職種名を入力（例: 事務、経理）" oninput="saveCS()" style="margin-top:4px">';
+      h+='</div>';
       h+='</div>';
       h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:#2BA84A">▶ 会社情報（任意）</summary>';
       h+='<div class="form-group"><label>事業内容</label><input class="cw-business" value="'+esc(w.business||'')+'" oninput="saveCS()" placeholder="例: 注文住宅の設計・施工"></div>';
@@ -2320,23 +2324,29 @@ function drawCS(){
       /* ② 業務概要 */
       h+='<div style="background:#f0faf1;padding:8px;border-radius:6px;margin-bottom:8px">';
       h+='<div style="font-size:12px;font-weight:bold;color:#2BA84A;margin-bottom:4px">② 業務概要（規模×業種×職種）</div>';
-      h+='<div class="inline-group">';
-      h+='<div class="form-group"><label>会社規模</label><select class="cw-cscale" onchange="if(this.value===\'その他\'){this.parentNode.querySelector(\'.cw-cscale-free\').style.display=\'block\';}else{this.parentNode.querySelector(\'.cw-cscale-free\').style.display=\'none\';this.parentNode.querySelector(\'.cw-cscale-free\').value=\'\';}saveCS()"><option value="">選択</option>';
       var _csVal=w.companyScale||'';
       var _csIsOther=_csVal&&SCALE_OPTS.indexOf(_csVal)===-1;
-      for(var j=0;j<SCALE_OPTS.length;j++)h+='<option value="'+SCALE_OPTS[j]+'"'+(((!_csIsOther&&_csVal===SCALE_OPTS[j])||(_csIsOther&&SCALE_OPTS[j]==='その他'))?' selected':'')+'>'+SCALE_OPTS[j]+'</option>';
-      h+='</select><input class="cw-cscale-free" value="'+esc(_csIsOther?_csVal:'')+'" placeholder="規模を入力" oninput="saveCS()" style="margin-top:4px;display:'+(_csIsOther?'block':'none')+'"></div>';
-      h+='<div class="form-group"><label>業種</label><select class="cw-cindustry" onchange="if(this.value===\'その他\'){this.parentNode.querySelector(\'.cw-cindustry-free\').style.display=\'block\';}else{this.parentNode.querySelector(\'.cw-cindustry-free\').style.display=\'none\';this.parentNode.querySelector(\'.cw-cindustry-free\').value=\'\';}saveCS()"><option value="">選択</option>';
       var _ciVal=w.companyIndustry||'';
       var _ciIsOther=_ciVal&&INDUSTRY_OPTS.indexOf(_ciVal)===-1;
-      for(var j=0;j<INDUSTRY_OPTS.length;j++)h+='<option value="'+INDUSTRY_OPTS[j]+'"'+(((!_ciIsOther&&_ciVal===INDUSTRY_OPTS[j])||(_ciIsOther&&INDUSTRY_OPTS[j]==='その他'))?' selected':'')+'>'+INDUSTRY_OPTS[j]+'</option>';
-      h+='</select><input class="cw-cindustry-free" value="'+esc(_ciIsOther?_ciVal:'')+'" placeholder="業種を入力" oninput="saveCS()" style="margin-top:4px;display:'+(_ciIsOther?'block':'none')+'"></div>';
-      h+='</div>';
-      h+='<div class="form-group"><label>職種</label><select class="cw-brole" onchange="if(this.value===\'その他\'){this.parentNode.querySelector(\'.cw-brole-free\').style.display=\'block\';}else{this.parentNode.querySelector(\'.cw-brole-free\').style.display=\'none\';this.parentNode.querySelector(\'.cw-brole-free\').value=\'\';}onBizRoleChange('+i+',this.value)"><option value="">選択</option>';
       var defRole=w.bizRole||defaultRoleFromCat(cat);
       var _brIsOther=defRole&&ROLE_OPTS.indexOf(defRole)===-1;
+      h+='<div class="inline-group">';
+      h+='<div class="form-group"><label>会社規模</label><select class="cw-cscale" onchange="saveCS();drawCS()"><option value="">選択</option>';
+      for(var j=0;j<SCALE_OPTS.length;j++)h+='<option value="'+SCALE_OPTS[j]+'"'+(((!_csIsOther&&_csVal===SCALE_OPTS[j])||(_csIsOther&&SCALE_OPTS[j]==='その他'))?' selected':'')+'>'+SCALE_OPTS[j]+'</option>';
+      h+='</select>';
+      if(_csIsOther||_csVal==='その他')h+='<input class="cw-cscale-free" value="'+esc(_csIsOther?_csVal:'')+'" placeholder="規模を入力" oninput="saveCS()" style="margin-top:4px">';
+      h+='</div>';
+      h+='<div class="form-group"><label>業種</label><select class="cw-cindustry" onchange="saveCS();drawCS()"><option value="">選択</option>';
+      for(var j=0;j<INDUSTRY_OPTS.length;j++)h+='<option value="'+INDUSTRY_OPTS[j]+'"'+(((!_ciIsOther&&_ciVal===INDUSTRY_OPTS[j])||(_ciIsOther&&INDUSTRY_OPTS[j]==='その他'))?' selected':'')+'>'+INDUSTRY_OPTS[j]+'</option>';
+      h+='</select>';
+      if(_ciIsOther||_ciVal==='その他')h+='<input class="cw-cindustry-free" value="'+esc(_ciIsOther?_ciVal:'')+'" placeholder="業種を入力" oninput="saveCS()" style="margin-top:4px">';
+      h+='</div>';
+      h+='</div>';
+      h+='<div class="form-group"><label>職種</label><select class="cw-brole" onchange="saveCS();drawCS()"><option value="">選択</option>';
       for(var j=0;j<ROLE_OPTS.length;j++)h+='<option value="'+ROLE_OPTS[j]+'"'+(((!_brIsOther&&defRole===ROLE_OPTS[j])||(_brIsOther&&ROLE_OPTS[j]==='その他'))?' selected':'')+'>'+ROLE_OPTS[j]+'</option>';
-      h+='</select><input class="cw-brole-free" value="'+esc(_brIsOther?defRole:'')+'" placeholder="職種を入力" oninput="saveCS()" style="margin-top:4px;display:'+(_brIsOther?'block':'none')+'"></div>';
+      h+='</select>';
+      if(_brIsOther||defRole==='その他')h+='<input class="cw-brole-free" value="'+esc(_brIsOther?defRole:'')+'" placeholder="職種を入力" oninput="saveCS()" style="margin-top:4px">';
+      h+='</div>';
       h+='<div style="margin-bottom:6px"><span class="template-btn" onclick="autoFillBizSummary('+i+')">🤖 上の3項目から業務概要を自動生成</span></div>';
       h+='<textarea class="cw-bizsum" rows="2" placeholder="例: 大手のゼネコンにて、施工管理を担当。" oninput="saveCS()">'+esc(w.bizSummary||'')+'</textarea>';
       h+='</div>';
