@@ -1521,12 +1521,12 @@ function genResumePDF(){
         pdf.addImage(img,'PNG',0,0,210,297);processedPages++;addPageToPDF();
       }).catch(function(err){restoreScale(container,saved);alert('PDF出力に失敗しました: '+err.message);});
     }else{
-      restoreScale(container,saved);pdf.save('履歴書.pdf');
+      restoreScale(container,saved);var _rn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();pdf.save('履歴書_'+(_rn||'未入力')+'.pdf');
     }
   }
   addPageToPDF();
 }
-function genCareerPDF(){if(typeof html2canvas==='undefined'||typeof jspdf==='undefined'){alert('PDF出力ライブラリを読み込み中です。数秒後にもう一度お試しください。');return;}var target=document.getElementById('pvCareer');html2canvas(target,{scale:2}).then(function(canvas){var img=canvas.toDataURL('image/png');var pdf=new jspdf.jsPDF('p','mm','a4');var w=pdf.internal.pageSize.getWidth();var h=(canvas.height*w)/canvas.width;pdf.addImage(img,'PNG',0,0,w,h);pdf.save('職務経歴書.pdf');});}
+function genCareerPDF(){if(typeof html2canvas==='undefined'||typeof jspdf==='undefined'){alert('PDF出力ライブラリを読み込み中です。数秒後にもう一度お試しください。');return;}var target=document.getElementById('pvCareer');html2canvas(target,{scale:2}).then(function(canvas){var img=canvas.toDataURL('image/png');var pdf=new jspdf.jsPDF('p','mm','a4');var w=pdf.internal.pageSize.getWidth();var h=(canvas.height*w)/canvas.width;pdf.addImage(img,'PNG',0,0,w,h);var _cn2=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();pdf.save('職務経歴書_'+(_cn2||'未入力')+'.pdf');});}
 
 /* ============================================================
    PHASE 2: 職務経歴書ウィザード
@@ -3074,7 +3074,7 @@ function genCareerA4PDF(){
         processed++;addPage();
       }).catch(function(err){restoreScale(container,saved);alert('PDF出力に失敗しました: '+err.message);});
     }else{
-      restoreScale(container,saved);pdf.save('職務経歴書.pdf');
+      restoreScale(container,saved);var _cn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();pdf.save('職務経歴書_'+(_cn||'未入力')+'.pdf');
     }
   }
   addPage();
@@ -3474,7 +3474,7 @@ async function genResumeXLSX(){
     try{out=await fixXlsxStyles(out);}catch(ex){console.warn(ex);}
 
     var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    dlBlob(blob,'履歴書_'+(fullName||'未入力').replace(/\s/g,'')+'_R3記入済.xlsx');
+    var _xn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();dlBlob(blob,'履歴書_'+(_xn||'未入力')+'.xlsx');
   }catch(err){
     console.error(err);
     alert('Excel出力に失敗しました: '+err.message);
@@ -3495,7 +3495,7 @@ function genCareerDOCX(){
   }
   var docHtml='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>@page{size:210mm 297mm;margin:20mm 20mm 20mm 20mm}body{font-family:"Yu Mincho","Hiragino Mincho ProN","MS Mincho",serif;color:#222;font-size:11.5px;line-height:1.45}</style></head><body>'+bodyHtml+'</body></html>';
   var blob=new Blob(['\ufeff'+docHtml],{type:'application/msword'});
-  dlBlob(blob,'職務経歴書_'+(fullName||'未入力').replace(/\s/g,'')+'.doc');
+  var _dn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();dlBlob(blob,'職務経歴書_'+(_dn||'未入力')+'.doc');
 }
 /* ページ読み込み時: セッション+ページ復元（全変数初期化後に実行） */
 ;(function(){try{
