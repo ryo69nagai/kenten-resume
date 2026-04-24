@@ -2670,14 +2670,12 @@ function buildWorkBlockChunks(w,isLast){
       if(p.tou)tokens.push(esc(p.tou));
       if(p.cost)tokens.push('契約金 '+esc(p.cost)+'万円');
       if(p.area)tokens.push('延床 '+esc(p.area)+'㎡');
-      var stParts=[];
-      if(p.struct)stParts.push(p.struct);
-      if(p.structFree)stParts.push(p.structFree);
-      if(stParts.length)tokens.push(esc(stParts.join('・')));
+      if(p.struct)tokens.push(esc(p.struct));
       if(p.floors)tokens.push(esc(p.floors));
       var pjText='・'+tokens.join('　');
       var pjH=chWrapHeight(pjText,11.5,1.4,44)+1;
       chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;padding-left:10px;line-height:1.4">'+pjText+'</div>',h:pjH,type:'detail'});
+      if(p.structFree){var sfText=esc(p.structFree);var sfH=chWrapHeight(sfText,11.5,1.4,44)+1;chunks.push({html:'<div style="font-size:11.5px;padding-left:14px;line-height:1.4">'+sfText+'</div>',h:sfH,type:'detail'});}
     }
   }
   /* ⑥ 転職理由（主な実績の下） */
@@ -2754,12 +2752,10 @@ function buildWorkBlockHTML(w,isLast){
       if(p.tou)tokens.push(esc(p.tou));
       if(p.cost)tokens.push('契約金 '+esc(p.cost)+'万円');
       if(p.area)tokens.push('延床 '+esc(p.area)+'㎡');
-      var stParts=[];
-      if(p.struct)stParts.push(p.struct);
-      if(p.structFree)stParts.push(p.structFree);
-      if(stParts.length)tokens.push(esc(stParts.join('・')));
+      if(p.struct)tokens.push(esc(p.struct));
       if(p.floors)tokens.push(esc(p.floors));
       h+='<div style="font-size:13px;margin-top:2px;padding-left:12px;line-height:1.6">・'+tokens.join('　')+'</div>';
+      if(p.structFree)h+='<div style="font-size:13px;padding-left:16px;line-height:1.6">'+esc(p.structFree)+'</div>';
     }
   }
   /* 転職理由（修正5訂正: 主な実績の下に表示） */
