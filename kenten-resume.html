@@ -290,7 +290,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
         <div class="wiz-title">職務経歴書作成</div>
         <button type="button" class="wiz-home" onclick="goToDash()" title="ダッシュボードへ戻る"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
       </div>
-      <div class="step-indicator" id="careerStepLabel">Step 1 / 6</div>
+      <div class="step-indicator" id="careerStepLabel">Step 1 / 4</div>
       <div class="progress-bar"><div class="progress-fill" id="careerProgress" style="width:16%"></div></div>
       <div class="step-area" id="careerStepArea"></div>
       <div class="wiz-nav">
@@ -877,15 +877,154 @@ function generateMotivationPR(){try{
   RD.motivation=_mvText;
   /* 履歴書には自己PRを表示しない（職務経歴書用）。古いRD.prが残っていれば除去 */
   if(RD.pr)delete RD.pr;
-  /* === 自己PR（職務経歴書用） === */
+  /* === 自己PR（職務経歴書用）: キャリア分析ベース（3パターン対応） === */
   var pr=[];
-  var _primaryCat=jobCatEntries.length>0?jobCatEntries[0].cat:'other';
-  var stLabel=JOBCAT_STRENGTH[_primaryCat]||JOBCAT_STRENGTH['other'];
-  pr.push('私の強みは、'+stLabel+'です。');
-  if(topProjects.length>0){var p=topProjects[0];var projDesc='直近では';if(p.name)projDesc+=p.name;if(p.struct)projDesc+='（'+p.struct;if(p.floors)projDesc+='・'+p.floors;if(p.area)projDesc+='・延床'+p.area+'㎡';if(p.struct)projDesc+='）';if(p.cost)projDesc+='、契約金額'+p.cost+'万円の工事';projDesc+='を担当いたしました。';pr.push(projDesc);}
-  else if(totalYears>0){pr.push('これまで'+totalYears+'年間の実務経験を通じて、現場の課題解決力と関係者との調整力を培ってまいりました。');}
+  var hopeCat=inferJobCatFromRole(tc.job)||'other';
+  var CROSS_SKILL={
+    'sekou→sekkei':'施工管理で培った現場の納まり・工程・コストへの深い理解を設計に活かせる',
+    'sekkei→sekou':'設計の意図を正確に把握し、品質の高い施工管理ができる',
+    'sekou→eigyo':'現場経験に基づく技術的な裏付けのある提案営業ができる',
+    'eigyo→sekou':'顧客折衝力を活かした発注者対応・近隣対応ができる',
+    'sekkei→eigyo':'設計知識を活かした説得力のある技術提案ができる',
+    'eigyo→sekkei':'顧客ニーズを的確に設計に反映できる',
+    'cad→sekkei':'CAD/BIMの実務スキルを活かした効率的な設計業務ができる',
+    'sekkei→cad':'設計意図を理解した精度の高い図面作成ができる',
+    'cad→sekou':'図面への深い理解を活かした施工図チェック・品質管理ができる',
+    'sekou→cad':'現場経験を活かした実用性の高い施工図作成ができる'
+  };
+  var _catLabel={sekou:'施工管理',sekkei:'設計',cad:'CAD・BIM',eigyo:'営業',other:'実務'};
+  /* --- 全職歴を解析 --- */
+  var _sortedWorks=[];for(var _sw=0;_sw<(CD.works||[]).length;_sw++)_sortedWorks.push(CD.works[_sw]);
+  _sortedWorks.sort(function(a,b){return (b.from||'').localeCompare(a.from||'');});
+  var latestWork=null;
+  for(var _lw=0;_lw<_sortedWorks.length;_lw++){if(_sortedWorks[_lw].company){latestWork=_sortedWorks[_lw];break;}}
+  /* bestWork=希望職種と一致する最新の経験, crossWork=異なる職種の最新の経験 */
+  var bestWork=null,crossWork=null,bestYears=0,crossYears=0;
+  /* 同一カテゴリの合計年数も計算 */
+  var bestTotalYears=0,crossTotalYears=0;
+  for(var _wi2=0;_wi2<_sortedWorks.length;_wi2++){
+    var _w=_sortedWorks[_wi2];if(!_w.company)continue;
+    var _wCat=_w.jobCat||'other';
+    var _wYrs=0;if(_w.from){var _td=_w.to?new Date(_w.to+'-01'):new Date();var _fd=new Date(_w.from+'-01');_wYrs=Math.round((_td-_fd)/(1000*60*60*24*365.25));}
+    if(_wCat===hopeCat){
+      bestTotalYears+=_wYrs;
+      if(!bestWork){bestWork=_w;bestYears=_wYrs;}
+    }else{
+      crossTotalYears+=_wYrs;
+      if(!crossWork){crossWork=_w;crossYears=_wYrs;}
+    }
+  }
+  var bestIsLatest=(bestWork&&latestWork&&bestWork.company===latestWork.company&&bestWork.from===latestWork.from);
+  /* --- プロジェクト取得ヘルパー: 指定workの最新プロジェクトを返す --- */
+  function _getLatestProj(work){
+    if(!work)return null;
+    var ps=work.projects||[];
+    for(var i=ps.length-1;i>=0;i--){if(ps[i].name)return ps[i];}
+    return null;
+  }
+  /* --- プロジェクト描写ヘルパー --- */
+  function _descProj(proj,prefix,suffix){
+    if(!proj)return '';
+    var d=prefix;
+    if(proj.name)d+=proj.name;
+    if(proj.struct){d+='（'+proj.struct;if(proj.floors)d+='・'+proj.floors;if(proj.area)d+='・延床'+proj.area+'㎡';d+='）';}
+    else{if(proj.area)d+='（延床'+proj.area+'㎡）';}
+    d+=suffix;
+    return d;
+  }
+  /* --- クロススキル判定 --- */
+  var crossPhrase='';
+  var useCross=false;
+  if(crossWork&&crossWork.jobCat&&crossTotalYears>=2){
+    var crossKey;
+    if(bestWork){crossKey=crossWork.jobCat+'→'+hopeCat;}
+    else{/* 未経験: latestWorkのcat→hopeで探す */crossKey=(latestWork?latestWork.jobCat:'other')+'→'+hopeCat;}
+    crossPhrase=CROSS_SKILL[crossKey]||'';
+    if(crossPhrase&&_sortedWorks.length>=2)useCross=true;
+  }
+  /* === パターン判定 === */
+  if(bestWork&&bestIsLatest){
+    /* ────────────────────────────────────────────
+       パターン①: 希望職種 = 現在の職種（同職種転職）
+       → bestWorkの最新プロジェクトで実績アピール
+       ──────────────────────────────────────────── */
+    var stLabel=JOBCAT_STRENGTH[hopeCat]||JOBCAT_STRENGTH['other'];
+    pr.push('私の強みは、'+stLabel+'です。');
+    var proj=_getLatestProj(bestWork);
+    if(proj){pr.push(_descProj(proj,'直近では','を担当いたしました。'));}
+    else if(bestTotalYears>0){pr.push((_catLabel[hopeCat]||'実務')+'として'+bestTotalYears+'年の経験を積んでまいりました。');}
+    /* クロススキル（サブ） */
+    if(useCross){
+      pr.push('また、'+(_catLabel[crossWork.jobCat]||'実務')+crossTotalYears+'年の経験から、'+crossPhrase+'点も強みです。');
+    }
+  }else if(bestWork&&!bestIsLatest){
+    /* ────────────────────────────────────────────
+       パターン②: 希望職種の経験あり、ただし現職は別職種
+       → bestWorkは年数のみ、latestWorkの最新プロジェクトで具体例
+       → クロススキルがメインの売り
+       ──────────────────────────────────────────── */
+    pr.push((_catLabel[hopeCat]||'実務')+bestTotalYears+'年の実務経験がございます。');
+    /* latestWork（現職）の最新プロジェクトを具体例に */
+    var latestProj=_getLatestProj(latestWork);
+    if(latestProj){
+      pr.push('加えて、'+_descProj(latestProj,'直近では','を担当いたしました。'));
+    }
+    /* クロススキルがメイン */
+    if(useCross){
+      /* ②ではlatestWork→hopeのクロスキーで再検索 */
+      var crossKey2=(latestWork?latestWork.jobCat:'other')+'→'+hopeCat;
+      var crossPhrase2=CROSS_SKILL[crossKey2]||crossPhrase;
+      pr.push((_catLabel[latestWork?latestWork.jobCat:'other']||'実務')+'の経験から、'+crossPhrase2+'点が強みです。');
+    }
+  }else{
+    /* ────────────────────────────────────────────
+       パターン③: 希望職種の経験なし（未経験転職）
+       → 全キャリアの年数列挙 + latestWorkの最新プロジェクト
+       → 転用スキルを強調
+       ──────────────────────────────────────────── */
+    /* 全カテゴリの年数を集計して列挙 */
+    var catYears={};
+    for(var _cy=0;_cy<_sortedWorks.length;_cy++){
+      var _cw=_sortedWorks[_cy];if(!_cw.company)continue;
+      var _cc=_cw.jobCat||'other';
+      var _cy2=0;if(_cw.from){var _td2=_cw.to?new Date(_cw.to+'-01'):new Date();var _fd2=new Date(_cw.from+'-01');_cy2=Math.round((_td2-_fd2)/(1000*60*60*24*365.25));}
+      catYears[_cc]=(catYears[_cc]||0)+_cy2;
+    }
+    var cyParts=[];for(var _ck in catYears){if(catYears[_ck]>0)cyParts.push((_catLabel[_ck]||'実務')+catYears[_ck]+'年');}
+    if(cyParts.length>0){pr.push(cyParts.join('、')+'の実務経験を積んでまいりました。');}
+    /* latestWorkの最新プロジェクト */
+    var latestProj2=_getLatestProj(latestWork);
+    if(latestProj2){pr.push(_descProj(latestProj2,'直近では','を担当いたしました。'));}
+    /* 転用スキル */
+    if(useCross){
+      pr.push(crossPhrase+'点が強みです。');
+    }else{
+      var fromLabel=JOBCAT_STRENGTH[latestWork?latestWork.jobCat:'other']||JOBCAT_STRENGTH['other'];
+      pr.push('これまで培った'+fromLabel+'を活かし、'+(_catLabel[hopeCat]||'新たな分野')+'でも貢献できると考えております。');
+    }
+  }
+  /* 資格 */
   if(certNames.length>0){pr.push('保有資格として'+certNames.slice(0,3).join('・')+'を取得しており、専門知識を実務に活かしてまいりました。');}
-  pr.push('貴社においても、これまでの経験と'+stLabel+'を発揮し、事業の発展に貢献してまいります。');
+  /* 締め（応募先企業の特徴を反映） */
+  var closeTarget='貴社';
+  var closeContrib='事業の発展に貢献してまいります。';
+  if(companyInfo&&companyInfo.strength){
+    closeContrib=companyInfo.strength+'に貢献してまいります。';
+  }else if(tc.name){
+    var indMotiv=IND_MOTIVATION[tc.industry]||'';
+    if(indMotiv){
+      /* 「貴社の○○」から特徴部分を抽出して貢献先にする */
+      var traitPart=indMotiv.replace(/貴社の/g,'').replace(/に強く惹かれ.*$/,'');
+      if(traitPart)closeContrib=traitPart+'に貢献してまいります。';
+    }
+  }
+  if(bestWork&&bestIsLatest&&useCross){
+    pr.push(closeTarget+'においても、'+(_catLabel[hopeCat]||'')+'の実務力と'+(_catLabel[crossWork.jobCat]||'')+'で培った知見を掛け合わせ、'+closeContrib);
+  }else if(bestWork&&!bestIsLatest){
+    pr.push(closeTarget+'においても、'+(_catLabel[hopeCat]||'')+(_catLabel[latestWork?latestWork.jobCat:'other']?'の経験と'+(_catLabel[latestWork.jobCat]||'')+'で培った知見を掛け合わせ、':'の経験を活かし、')+closeContrib);
+  }else{
+    pr.push(closeTarget+'においても、これまでの経験を活かし、'+closeContrib);
+  }
   CD.pr=pr.join('');
   var mEl=document.getElementById('rMotivation');if(mEl)mEl.value=RD.motivation;
   var pEl=document.getElementById('csPR');if(pEl)pEl.value=CD.pr;
@@ -914,8 +1053,9 @@ function updateMotivationCharCount(){
 /* 資格名一覧を取得（志望動機・PR共用） */
 function getCertNamesForMotivation(){
   var names=[];
-  if(RD.certs)for(var i=0;i<RD.certs.length;i++){var cn=typeof RD.certs[i]==='string'?RD.certs[i]:RD.certs[i].name;if(cn)names.push(cn);}
-  if(RD.certOther&&Array.isArray(RD.certOther))for(var i=0;i<RD.certOther.length;i++){if(RD.certOther[i].name)names.push(RD.certOther[i].name);}
+  var _carRe=/自動車|運転免許|二輪|バイク|大型免許|中型免許|準中型|けん引|フォークリフト/;
+  if(RD.certs)for(var i=0;i<RD.certs.length;i++){var cn=typeof RD.certs[i]==='string'?RD.certs[i]:RD.certs[i].name;if(cn&&!_carRe.test(cn))names.push(cn);}
+  if(RD.certOther&&Array.isArray(RD.certOther))for(var i=0;i<RD.certOther.length;i++){if(RD.certOther[i].name&&!_carRe.test(RD.certOther[i].name))names.push(RD.certOther[i].name);}
   return names;
 }
 
@@ -983,29 +1123,7 @@ photoDataURL=localStorage.getItem('kp_photo_'+e)||'';
 document.getElementById('dashTitle').textContent=CU.name+'さんのダッシュボード';goTo('pageDash');}
 function doLogout(){CU=null;try{localStorage.removeItem('kp_session');localStorage.removeItem('kp_page');}catch(ex){}RD={education:[{}],work:[{}],skills:'',summary:''};photoDataURL='';goTo('pageLogin');}
 function goToDash(){persistRD();persistCD();goTo('pageDash');}
-/* v8: 汚染データ+パスワード全消し + IndexedDBからnagai@green-i.co.jpへ復旧 */
-;(function(){try{
-if(localStorage.getItem('kp_v8'))return;
-/* グローバルキー + 汚染されたメール別キー + パスワードハッシュを全削除 */
-var del=[];
-for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&/^kp_(rd|cd|photo|pass)/.test(k))del.push(k);}
-var rem2=['kp_rd_bk','kp_rd_bk2','kp_cd_bk','kp_cd_bk2','kp_career','kp_migrated','kp_v4_clean','kp_v5_recovered','kp_v6','kp_v7'];
-for(var i=0;i<del.length;i++)localStorage.removeItem(del[i]);
-for(var i=0;i<rem2.length;i++)localStorage.removeItem(rem2[i]);
-/* IndexedDBのデータはnagai@green-i.co.jpのもの — ハードコードで正しいキーへ復旧 */
-var targetEmail='nagai@green-i.co.jp';
-var req=indexedDB.open('kp_vault',1);
-req.onsuccess=function(e){
-  var db=e.target.result;
-  if(!db.objectStoreNames.contains('data')){localStorage.setItem('kp_v8','1');db.close();return;}
-  var tx=db.transaction('data','readonly');var st=tx.objectStore('data');
-  var r1=st.get('kp_rd');r1.onsuccess=function(){if(r1.result)localStorage.setItem('kp_rd_'+targetEmail,r1.result);};
-  var r2=st.get('kp_cd');r2.onsuccess=function(){if(r2.result)localStorage.setItem('kp_cd_'+targetEmail,r2.result);};
-  var r3=st.get('kp_photo');r3.onsuccess=function(){if(r3.result)localStorage.setItem('kp_photo_'+targetEmail,r3.result);};
-  tx.oncomplete=function(){localStorage.setItem('kp_v8','1');db.close();};
-};
-req.onerror=function(){localStorage.setItem('kp_v8','1');};
-}catch(ex){localStorage.setItem('kp_v8','1');}})();
+/* v8マイグレーション済み — 処理削除（再実行によるデータ消失を防止） */
 function persistRD(){try{
   if(!CU||!CU.email)return;
   var j=JSON.stringify(RD);if(!j||j.length<10)return;
@@ -1385,7 +1503,7 @@ function genCareerPDF(){if(typeof html2canvas==='undefined'||typeof jspdf==='und
    職種別質問ライブラリ・テンプレート・出力ロジック
    ============================================================ */
 
-var CS=1, CM=5;
+var CS=1, CM=4;
 var CD={
   works:[],
   summary:'',
@@ -1470,7 +1588,7 @@ var QLIB={
 };
 
 /* ========== TRIGGER_LIB: Phase1 データモデル - トリガー辞書 (135項目) ========== */
-var TRIGGER_LIB = {sekou:[{id:'SKN-F01',type:'f',label:"大きな案件に携わりたい",forward:"より大規模で複雑度の高い案件に携わり、施工管理としてのスケール感を広げることで、実務能力を高度化させたいと考えています。"},{id:'SKN-H01',type:'h',label:"残業が多すぎる",forward:"現在の勤務先では恒常的な時間外業務の中での対応を余儀なくされています。労働環境の改善と効率的な工程管理が実現できる現場での経験を重ねたいです。"},{id:'SKN-F02',type:'f',label:"発注者側に回りたい",forward:"ゼネコン施工管理での基礎経験を活かしながら、発注者やプロジェクトマネージャーとしての立場から、建築プロジェクト全体の企画・計画段階から竣工まで関わることで、より高度なプロジェクト経営スキルを習得したいと考えています。"},{id:'SKN-H02',type:'h',label:"休みがとれない",forward:"現職では工程短縮に対応するため休日出勤が頻繁でしたが、より計画的で持続可能な工程設定ができる職場環境での実践を望みます。"},{id:'SKN-F03',type:'f',label:"専門性を深めたい",forward:"複数工種での広範な経験をベースに、特定分野（〇〇工種）での専門的知見を深掘りし、その領域でのプロフェッショナルになりたいと考えています。"},{id:'SKN-H03',type:'h',label:"責任ばかり重い",forward:"現職では多重下請け構造の中で自律的な判断機会に限界がありました。より主体的な工程判断・品質判断ができるポジションでの経験を重ねたいです。"},{id:'SKN-F04',type:'f',label:"元請けで働きたい",forward:"これまでの下請け案件での経験を活かしつつ、元請けポジションで発注者との関係構築や全工程の統括責任を担い、施工管理職としての営為をより大きなスコープで展開したいと考えています。"},{id:'SKN-H04',type:'h',label:"現場の人間関係がつらい",forward:"現職では協力業者との関係構築が課題となる環境でしたが、相互尊重に基づいた協力体制を構築できる職場での実践を目指します。"},{id:'SKN-F05',type:'f',label:"上流工程に関わりたい",forward:"現在までの施工段階での経験に加え、企画・設計・監理まで一貫した工程を経験することで、施工管理としての視野を拡大し、建築生産全体への貢献を実現したいと考えています。"},{id:'SKN-H05',type:'h',label:"給料があがらない",forward:"現職では職務の重責に対して処遇評価が十分に反映されにくい構造でしたが、業績と個人の専門性が適正に評価される環境での実務を望みます。"},{id:'SKN-F06',type:'f',label:"施工品質を高めたい",forward:"これまでの経験の中で安全・品質リスクを実感してきたため、高度なセーフティマネジメントと品質保証体系を持つ組織での実践を通じて、自身の安全管理能力をさらに高めたいと考えています。"},{id:'SKN-H06',type:'h',label:"身体がもたない",forward:"現職での転勤頻度の高さから家族との時間が限定的でしたが、より地域密着型あるいは勤務地の安定性が高い環境での就業を希望しています。"},{id:'SKN-F07',type:'f',label:"資格をとりたい",forward:"施工管理技士資格の取得と活用を通じてキャリアの深化を図りたいと考えており、資格取得支援制度が充実した環境での専門性開発を希望しています。"},{id:'SKN-H07',type:'h',label:"上司と合わない",forward:"現職の組織文化においては適切なコミュニケーションと明確な指示系統の構築が課題でしたが、透明性と信頼に基づいた職場環境での実務経験を求めています。"},{id:'SKN-F08',type:'f',label:"特殊な工事に携わりたい",forward:"現在までの基盤的な実績をもとに、特定地域・特定工種での専門的実装機会を求め、キャリアの多様性を実現したいと考えています。"},{id:'SKN-H08',type:'h',label:"指示が二転三転する",forward:"現職での労働環境が身体への負荷となっているため、より衛生管理が整備された職場あるいは屋内施工が主体の環境での就業を希望しています。"},{id:'SKN-F09',type:'f',label:"チームを率いたい",forward:"これまでの個別案件での実績をベースに、複数メンバーから構成されるチームのマネジメントを通じて、リーダーシップとオーガナイゼーション能力をさらに開発したいと考えています。"},{id:'SKN-H09',type:'h',label:"給料に見合わない",forward:"現職での成長機会が限定的と感じるため、業界内での多様なキャリアパス（営業、管理部門、コンサル等）が開かれた環境でのキャリア発展を検討しています。"},{id:'SKN-F10',type:'f',label:"定時で帰りたい",forward:"現職での経験をふまえて、業務効率化とワークライフバランスを両立させた施工管理プロセスを実装できる環境での実務を通じて、持続可能で質の高いプロジェクト遂行を実現したいと考えています。"},{id:'SKN-H10',type:'h',label:"権限がない",forward:"現職では担当責務に対する適切な権限配分が不十分でしたが、実務的な判断権限を伴った施工管理ポジションでの責任遂行を望んでいます。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],sekkei:[{id:'SKK-H01',type:'h',label:"残業が多すぎる",forward:"ワークライフバランスと設計クオリティを両立できる環境を求め、効率的な設計体制（BIM・チーム設計・決済フロー最適化）を導入している企業への転職を志望します。"},{id:'SKK-F01',type:'f',label:"スキルを磨きたい",forward:"これまで意匠設計での経験を活かしつつ、構造・設備領域の知見を習得することで、統合的な設計提案ができる技術者を目指しています。"},{id:'SKK-H02',type:'h',label:"単純作業ばかり",forward:"設計者としてのキャリアを段階的に発展させるため、明確な職責設定と裁量権委譲がある組織環境を求めています。"},{id:'SKK-F02',type:'f',label:"大規模案件を担当したい",forward:"これまで小～中規模案件での設計経験を着実に積みました。次のキャリアステージでは、大規模施設や複数言語対応が必要な国際プロジェクトに挑戦したいと考えています。"},{id:'SKK-H03',type:'h',label:"提案が活かされない",forward:"設計者として社会的な実績評価を築きたいため、プロジェクトの対外発表（メディア・学会・展示）に積極的な企業文化を求めています。"},{id:'SKK-F03',type:'f',label:"設計の最後まで見たい",forward:"設計者として、概念設計から施工監理・竣工検査まで、プロジェクトサイクル全体に関わることで、自分の設計意図がいかに現実化するかを学びたいです。"},{id:'SKK-H04',type:'h',label:"給料が安い",forward:"建築設計職としてのキャリアを長期的に続けるためには、適正な経済的基盤が不可欠と考えています。給与テーブルと実績評価制度が透明で、設計者の専門性に見合った処遇を実現していることに魅力を感じます。"},{id:'SKK-F04',type:'f',label:"BIMで設計したい",forward:"設計効率化と質的高度化を実現する BIM・3D設計技術に強く関心があります。パラメトリック設計やクラウド協働体制の実践を通じ、次世代の設計プロセス標準化に貢献できる技術者を目指しています。"},{id:'SKK-H05',type:'h',label:"設計変更が多い",forward:"設計プロセスの安定性とクオリティ維持を重視します。変更管理体制（施主・施工・行政との調整フロー）が機能していることに期待し、予測可能な進捗管理の中で高品質な設計に従事したいと考えています。"},{id:'SKK-F05',type:'f',label:"環境配慮設計に取り組みたい",forward:"気候変動と建築の社会的責任に対する認識が深まり、環境性能と利用者満足を統合した設計に取り組みたいと考えています。サステナブル設計プロジェクトの実績と研究体制に強く魅力を感じます。"},{id:'SKK-H06',type:'h',label:"成長できていない",forward:"建築設計者としての専門性を深め、社会的責任を果たすため、1級建築士資格取得と継続教育（CPD）を組織的に支援する環境を求めています。"},{id:'SKK-F06',type:'f',label:"リノベーションしたい",forward:"既存建築のポテンシャルを引き出し、地域コミュニティの価値を高めるリノベーション設計に魅力を感じています。保存再生・コンバージョンプロジェクトの成果を拝見し、深い関係構築を学びたいです。"},{id:'SKK-H07',type:'h',label:"施主対応がつらい",forward:"設計本来の創造的業務に集中する環境を求めています。営業・事務部門と設計部門の役割分担を明確にし、施主相談窓口を一本化するなど、設計者の業務フォーカスを保護する体制を構築していることに期待します。"},{id:'SKK-F07',type:'f',label:"有名な事務所で学びたい",forward:"建築設計における自分の美学と思考枠組みを確立するため、業界で高く評価されている貴事務所での実務経験を強く志望します。設計理念と手法を直に学び、自分の設計者としてのアイデンティティを形成したいです。"},{id:'SKK-H08',type:'h',label:"経営が不安定",forward:"建築設計職としての長期キャリア形成には、組織の経営安定性と持続的な事業展開が不可欠と考えています。経営基盤の安定性と、中長期的な事業戦略における設計部門の位置付けの明確さに魅力を感じます。"},{id:'SKK-F08',type:'f',label:"様々な分野で設計したい",forward:"建築設計の知識を基盤としつつ、インテリア・ランドスケープまで統合した環境デザインに挑戦したいと考えています。複合領域設計アプローチを通じ、使い手にとって心地よい完成度の高い空間を創造したいです。"},{id:'SKK-H09',type:'h',label:"案件が限定的",forward:"現在の専門分野を深化させるとともに、異なる建築用途・地域・環境条件での実例経験を積むことで、普遍的な設計原理を習得したいと考えています。多様なプロジェクトポートフォリオの中で、専門技術の応用幅を広げたいです。"},{id:'SKK-F09',type:'f',label:"いずれ独立したい",forward:"将来的に自分のデザイン哲学を体現した設計活動を展開することを視野に、現在のキャリアステージでは設計の専門性を極めるとともに、プロジェクト経営・組織運営の経験を積むことが重要と考えています。"},{id:'SKK-H10',type:'h',label:"設計自由度がない",forward:"住宅設計での基礎経験を活かしつつ、より設計自由度の高い、またはプロジェクトの複雑性が高い建築領域に挑戦したいと考えています。商業施設・複合施設・公共建築の案件経験を通じ、設計思考の深化を目指しています。"},{id:'SKK-F10',type:'f',label:"使い手の反応が知りたい",forward:"建築設計者として、建築が完成した後の使い手の満足度や社会的インパクトまで責任を持つキャリアを志向しています。参加型設計・ユーザーリサーチ・コミュニティ連携のプロセスに関わることで、使い手に真摯に向き合う設計実践を積みたいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],cad:[{id:'CAD-H01',type:'h',label:"残業が多すぎる",forward:"設計プロセスの効率化やプロジェクト管理の最適化を通じて、働き方改革に貢献できる環境で、ワークライフバランスを実現したいと考えます。"},{id:'CAD-F01',type:'f',label:"BIM操作を習得したい",forward:"Revitを用いた3Dモデリングから施工図自動抽出、コスト管理まで一連の業務を経験することで、デジタル建築の専門家としての市場価値を高めたいです。"},{id:'CAD-H02',type:'h',label:"単調な作業ばかり",forward:"BIMモデリングや施工図作成など、より専門的で創造性を要する業務に携わり、建築知識を深めながら技術者としてのキャリアを構築したいです。"},{id:'CAD-F02',type:'f',label:"建築知識を深めたい",forward:"構造図・意匠図の融合、納まり詳細、施工工程を踏まえた施工図を作成することで、「建物の品質を決める職種」として専門家として認識されたいです。"},{id:'CAD-H03',type:'h',label:"単価が安い",forward:"スキルの高度化やBIM・積算などのマルチスキル習得により、市場価値を高めて、貢献度が適切に反映される職場環境で働きたいです。"},{id:'CAD-F03',type:'f',label:"単価の高い案件をやりたい",forward:"施工図やCAD図面から適正に数量拾いを行い、原価の見積根拠を理解することで、プロジェクトの経営側にも携わる専門家として、経営層との対話ができる立場を目指したいです。"},{id:'CAD-H04',type:'h',label:"雇用が不安定",forward:"正社員としての安定した雇用や、複数プロジェクトでの実績構築を通じて、長期的なキャリア設計が可能な環境で働きたいと考えます。"},{id:'CAD-F04',type:'f',label:"設計職に転向したい",forward:"設計補助の経験を通じて、意匠・構造・設備の統合的な設計思考を身に付け、資格取得や大学進学を経由して、設計者としてのキャリアへの道を開きたいです。"},{id:'CAD-H05',type:'h',label:"スキルが身につかない",forward:"Revit・ArchiCADなどの次世代BIMツールやプラント系CADを習得することで、業界トレンドに対応できる技術者になり、案件の幅を広げたいです。"},{id:'CAD-F05',type:'f',label:"多様なプロジェクトに関わりたい",forward:"CAD設計の段階から現場との連携を重視し、施工段階での課題を図面に反映させる実務経験を積むことで、実践的な建築知識と現場管理スキルを同時に習得したいです。"},{id:'CAD-H06',type:'h',label:"修正ばかり多い",forward:"施工図作成時に現場監督や職人と協力し、実装可能な図面を作成する過程で、建築現場の実務知識を深めながらコミュニケーション能力を養いたいです。"},{id:'CAD-F06',type:'f',label:"安定した環境で働きたい",forward:"クラウド型CADツールやBIMプラットフォームの導入により、リモートワークやフレックスタイムが実現可能な企業での業務を通じて、仕事と生活の調和を図りながらパフォーマンスを発揮したいです。"},{id:'CAD-H07',type:'h',label:"納期がきつい",forward:"フレックスタイムやリモート勤務導入企業での柔軟な就業、定期的な休息・ストレッチを含む健康管理体制の整った職場で、体調を整えながら働きたいです。"},{id:'CAD-F07',type:'f',label:"チームに入りたい",forward:"複数社での実務経験を積んで専門性と実績を深め、自身のポートフォリオを構築し、フリーランスとしての営業基盤を確立できる企業環境での修行期間を設けたいです。"},{id:'CAD-H08',type:'h',label:"労働環境が悪い",forward:"施工図技術者や設計士、積算士などの資格取得やマルチスキル化を通じて、明確なキャリアステップを描き、管理職や専門家としてのポジションを目指したいです。"},{id:'CAD-F08',type:'f',label:"スキルアップしたい",forward:"企業の資格取得支援制度（通信教育補助、試験休暇など）を活用し、建築士や積算士、認定BIMマネジャー資格を順次取得することで、専門資格保有者としての市場価値を確立したいです。"},{id:'CAD-H09',type:'h',label:"やりがいがない",forward:"ダイバーシティを重視し、心理的安全性の高い職場環境を整備している企業で、性別や年齢を問わずチームの一員として尊重される環境で働きたいです。"},{id:'CAD-F09',type:'f',label:"専門性を持ちたい",forward:"3Dビジュアライゼーション、VR建築提案、ドローン測量、CIM（建設情報モデル）など、建設DXの最前線に携わることで、業界変革の一員として技術者としての充実感を得たいです。"},{id:'CAD-H10',type:'h',label:"時給が上がらない",forward:"発注元企業での直接雇用やアウトソーシング企業での正社員化を通じて、中間マージン削減による適正賃金と、経営方針への直接的な関与機会を得たいです。"},{id:'CAD-F10',type:'f',label:"正社員になりたい",forward:"プラント設計、土木インフラ、造船設計など、異なる業界でのCADスキルを応用し、業界固有の専門知識を習得することで、複数領域で活躍できる汎用技術者を目指したいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],eigyo:[{id:'EGY-H01',type:'h',label:"ノルマが厳しい",forward:"お客様の課題を丁寧に掘り下げ、最適な提案を時間をかけて組み立てることで、真の信頼関係に基づいた長期的なご契約を実現したい。"},{id:'EGY-F01',type:'f',label:"根拠のある提案をしたい",forward:"お客様のニーズを深く理解し、課題を分析した上で最適なソリューションを提案し、信頼に基づいた長期的なパートナーシップを構築したい。"},{id:'EGY-H02',type:'h',label:"人付き合いが疲れた",forward:"顧客ニーズを事前に把握し、双方にとって有意義な対話の時間を作ることで、効果的で質の高い営業プロセスを確立したい。"},{id:'EGY-F02',type:'f',label:"顧客の信頼を勝ち取りたい",forward:"質の高い顧客層と向き合い、高度な提案スキルを駆使して、単価の大きい商談を積み重ねることで、営業としての専門性と成長を実感したい。"},{id:'EGY-H03',type:'h',label:"残業が多すぎる",forward:"顧客との面談時間を計画的に設定し、準備・企画・提案資料の作成に質的な時間を割き、仕事の効率性と提案クオリティの両立を実現したい。"},{id:'EGY-F03',type:'f',label:"商品力で売りたい",forward:"法人顧客との中長期的なパートナーシップを構築し、大型案件の提案から導入・運用支援まで、営業活動の幅と裁量を広げたい。"},{id:'EGY-H04',type:'h',label:"給料が歩合に左右される",forward:"成果と貢献度が明確に評価される安定した給与体系のもとで、腰を据えて中長期的な顧客基盤を構築し、スキル磨きに専念したい。"},{id:'EGY-F04',type:'f',label:"営業スキルを磨きたい",forward:"既存顧客との関係を深掘りし、ロイヤリティを高めることで、紹介と口コミに支えられた安定的な営業基盤を構築したい。"},{id:'EGY-H05',type:'h',label:"上司のやり方に納得できない",forward:"心理的安全性が確保された環境のもとで、失敗から学び、試行錯誤を重ねながら営業力を段階的に高めていきたい。"},{id:'EGY-F05',type:'f',label:"大型案件を扱いたい",forward:"営業現場で得たインサイトをデータ化し、マーケティング戦略や企画施策に反映させることで、営業と企画の連携を強化したい。"},{id:'EGY-H06',type:'h',label:"成果が評価されない",forward:"差別化されたプロダクト力と競争優位性を持つ商品の魅力を、説得力を持って顧客に訴求し、自信を持った営業活動を展開したい。"},{id:'EGY-F06',type:'f',label:"担当地域を広げたい",forward:"建築技術・不動産法務の深い知識を武器に、顧客の疑問に説得力を持って応答し、技術的差別化ができる営業人材として認識されたい。"},{id:'EGY-H07',type:'h',label:"顧客との関係が重い",forward:"成長志向が高く、相互に学び合える優秀な同僚と一緒に、チーム全体で営業目標を達成する充実感を経験したい。"},{id:'EGY-F07',type:'f',label:"チーム営業を体験したい",forward:"営業スキルと経験を次世代に継承し、チーム全体の成長を主導することで、組織への貢献と自己実現の両立を実現したい。"},{id:'EGY-H08',type:'h',label:"クレーム処理が多い",forward:"事前の丁寧な説明とアフターフォロー体制の充実により、顧客満足度を高め、リピートと紹介に結びつく信頼関係を構築したい。"},{id:'EGY-F08',type:'f',label:"業界知識を深めたい",forward:"国境を超えた営業活動を通じて、日本の建築・不動産プロダクトの価値を世界に訴求し、グローバル市場での営業経験を積みたい。"},{id:'EGY-H09',type:'h',label:"提案内容が気に入らない",forward:"営業活動に専念でき、顧客提案資料作成・市場分析・営業企画など付加価値の高い業務に時間を配分し、営業スキルを集中的に向上させたい。"},{id:'EGY-F09',type:'f',label:"営業企画に携わりたい",forward:"物件紹介だけに留まらず、融資・税務・相続対策など、顧客の資産形成全体を支援できるコンサルティング型営業を実践したい。"},{id:'EGY-H10',type:'h',label:"精神的に疲弊している",forward:"プロセス評価と成果評価の両面で適正に処遇される環境のもとで、同僚との建設的な協業関係を築きながら、安心感を持って営業活動に取り組みたい。"},{id:'EGY-F10',type:'f',label:"顧客満足度を高めたい",forward:"ブランド力と経営基盤が磐石の大手企業のもとで、社会的信用を背景にした営業活動を展開し、長期的なキャリア形成に集中したい。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],other:[{id:'OTH-H01',type:'h',label:"残業が多すぎる",forward:"現在の職場では業務量に対して人員配置が逼迫しており、ワークライフバランスと責任ある業務の両立ができる職場で、より質の高い成果を上げたいと考えています。"},{id:'OTH-F01',type:'f',label:"ものづくりがしたい",forward:"これまでの経験を通じ、物理的な成果物の完成に立ち会えることが大きなやりがいになることに気づきました。建設業界では、自分の携わった構造物が地域社会に貢献し、数十年単位で存続することに強い魅力を感じます。"},{id:'OTH-H02',type:'h',label:"給料があがらない",forward:"実績をもとに評価される、明確なキャリアパスのある環境に身を置きたいです。個人の成長が給与・職位に反映される仕組みがあれば、さらなるスキル習得に注力できます。"},{id:'OTH-F02',type:'f',label:"資格を取りたい",forward:"スキルポートフォリオを拡大し、市場価値の高い専門資格の取得を目指しています。新しい業界での実践的な経験を通じ、業界標準の資格取得支援制度を活用しながら、キャリアの基盤を構築したいです。"},{id:'OTH-H03',type:'h',label:"人間関係が悪い",forward:"互いを尊重し、心理的安全性が確保された職場環境を重視しています。チーム全体の目標達成に向け、透明性のあるコミュニケーションが取れる企業文化のもとで働きたいです。"},{id:'OTH-F03',type:'f',label:"社会に貢献したい",forward:"個人のスキルが地域社会の発展と生活基盤向上に直結する仕事環境を求めています。社会インフラの構築に参画することで、長期的で継続的な社会貢献を実現したいです。"},{id:'OTH-H04',type:'h',label:"転勤が多い",forward:"安定した勤務地での実務経験を通じ、深い現場知識と地域特性の理解を獲得できる環境を希望します。長期的なキャリア構築と生活基盤の安定が両立できる職場を探しています。"},{id:'OTH-F04',type:'f',label:"建設業の将来に賭けたい",forward:"日本の社会基盤更新ニーズが高まる今後10~20年、建設業は持続的な需要が見込まれます。産業の成長性と安定性の両面で、自分のキャリアを築く環境として最適と考えています。"},{id:'OTH-H05',type:'h',label:"精神的に疲弊している",forward:"心身の健全性を取り戻し、持続可能なペースで質の高い仕事ができる環境を優先します。適切な勤務時間、サポート体制のある職場で、再び仕事にやりがいを感じられるようになりたいです。"},{id:'OTH-F05',type:'f',label:"デジタル化に携わりたい",forward:"デジタル化が進む建設業界に身を置き、新しい技術スタックと実務の融合に関わることで、業界全体の効率化に貢献したいです。IT知識と現場経験の双方を活かせるポジションを目指しています。"},{id:'OTH-H06',type:'h',label:"成長できていない",forward:"多様な実務を通じて継続的にスキルを高められる環境を求めています。先輩からのメンタリングや公式な研修制度を活用し、1~2年で業界標準のスキルセットを習得したいです。"},{id:'OTH-F06',type:'f',label:"安定した環境で働きたい",forward:"長期的なキャリアプランを立てられる正社員として、安定した雇用基盤のもとで専門性を深めたいです。生活基盤の確保と職業スキルの蓄積を同時に実現できる環境を重視しています。"},{id:'OTH-H07',type:'h',label:"給料が安い",forward:"生活の安定を確保したうえで、自己投資や家族へのサポートができるレベルの報酬体系を求めています。自分の貢献度に見合った適切な給与条件のもとで、責任ある業務に取り組みたいです。"},{id:'OTH-F07',type:'f',label:"専門家になりたい",forward:"広い経験より、特定領域での深い専門性を体系的に磨きたいです。その分野のリーダーとして、組織・業界に貢献できるプロフェッショナルを目指し、継続的に学習・成長していく環境を求めています。"},{id:'OTH-H08',type:'h',label:"通勤が遠い",forward:"通勤時間の短縮によって、業務外の自己啓発や家族時間に充てられる時間を確保したいです。地元での就業により、仕事と生活の両立がより実現可能になると考えています。"},{id:'OTH-F08',type:'f',label:"マネジメントを学びたい",forward:"組織の成長と人材育成に責任を持つポジションにステップアップしたいです。自分のリーダーシップスタイルを確立しながら、チーム全体の目標達成と部下の成長を同時に実現できる環境を目指しています。"},{id:'OTH-H09',type:'h',label:"会社の方針が納得できない",forward:"法令遵守と企業倫理を最優先とする企業文化のもとで働きたいです。透明性のあるコンプライアンス体制と、全従業員の安全・尊厳を守る仕組みが整備された環境を強く希望しています。"},{id:'OTH-F09',type:'f',label:"環境配慮に取り組みたい",forward:"社会全体のサステナビリティ目標達成に貢献できる仕事を重視しています。環境負荷低減と経済性の両立を実現する建設プロジェクトに携わることで、次世代への責任を果たしたいです。"},{id:'OTH-H10',type:'h',label:"育児との両立が難しい",forward:"人生のこのステージでは、家族との時間と責任ある仕事の両立が最優先課題です。柔軟な勤務形態や介護休暇制度が充実した企業で、家族を支えながら職務を全うしたいです。"},{id:'OTH-F10',type:'f',label:"新しい分野に挑戦したい",forward:"これまでの経験を基盤としつつ、未知の領域への挑戦を通じて新たな視点と専門性を獲得したいです。新しい業界での初期段階から携わることで、異なる価値観や課題解決力を身につけたいと考えています。"},{id:'OTH-H11',type:'h',label:"差別がある",forward:"個人の能力と実績が公正に評価される、ダイバーシティを推進する組織文化を強く望みます。性別・年齢に関わらず、キャリアを構築できる透明性のある人事制度のある環境を選びたいです。"},{id:'OTH-F11',type:'f',label:"難しい案件に携わりたい",forward:"自分の能力と経験を最大限に発揮できるような、スケールの大きい・技術的難度の高いプロジェクトに携わりたいです。業界トップクラスの企業における難関案件での実績構築を目指しています。"},{id:'OTH-H12',type:'h',label:"利益重視が強い",forward:"顧客の長期的な満足と信頼構築を基盤とした、サステナブルなビジネスモデルの企業を目指しています。適切な利益率の中で、社会的責任と顧客価値を均衡させる経営スタンスの組織に貢献したいです。"},{id:'OTH-F12',type:'f',label:"柔軟に働きたい",forward:"多様な働き方を支援し、従業員の個人的事情と業務効率の両立を実現できる企業環境を求めています。柔軟な勤務形態による生産性向上と、よりよいワークライフバランスの実現を目指しています。"},{id:'OTH-H13',type:'h',label:"倫理観が合わない",forward:"利益と社会への責任の両立を掲げる企業で働きたいです。環境配慮、顧客価値向上、従業員の福利厚生向上を同時に追求できる経営姿勢の組織を重視しています。"},{id:'OTH-F13',type:'f',label:"安全衛生を重視したい",forward:"現場における安全文化の醸成と、労働環境の継続的改善に責任を持つポジションを目指しています。事故ゼロと従業員の心身の健全性を優先する組織で、システマティックな安全管理を推進したいです。"},{id:'OTH-H14',type:'h',label:"事務職に転換したい",forward:"これまでの現場経験を背景に、事務・企画・マネジメント領域でのキャリア転換を志しています。身体的負担と職務の難度のバランスを取りながら、長期的に職務を全うできる環境を求めています。"},{id:'OTH-F14',type:'f',label:"人を育てたい",forward:"自分が習得した知識・技能を体系的に後進に伝承し、業界全体の人材育成に貢献したいです。メンタリング機能を持つ環境で、人材育成システムの構築と実行に主導的に関わりたいです。"},{id:'OTH-H15',type:'h',label:"会社の将来性が見えない",forward:"安定した経営基盤と明確な成長戦略を持つ企業で、安心して長期的なキャリアを築きたいです。業界内での競争地位が強固で、従業員への投資を継続できる企業環境を優先しています。"},{id:'OTH-F15',type:'f',label:"いずれ独立したい",forward:"将来的な独立に向けて、体系的なビジネス知識と現場ネットワークを構築したいです。大規模な組織での実務経験を通じ、経営視点と実行力を磨き、自身のキャリアパスの選択肢を広げたいと考えています。"},{id:'OTH-H16',type:'h',label:"上司が信頼できない",forward:"有能で信頼できるリーダーのもとで、明確な指針と納得のいく指導を受けながら成長したいです。組織の意思決定が透明で、従業員の提案を真摯に受け止める経営層との信頼関係を重視しています。"},{id:'OTH-F16',type:'f',label:"副業をしたい",forward:"本業での専門性を深めつつ、個人プロジェクトや副業活動も推進できる柔軟な職場環境を求めています。複数のキャリアの相乗効果を生み出し、自分の総合的な市場価値を高めたいです。"},{id:'OTH-H17',type:'h',label:"専門性を高められない",forward:"長期的に特定分野の知識を深める機会を得られる環境を求めています。一つの領域での継続的な経験を通じ、業界内で認識される専門家としてのポジションを確立したいです。"},{id:'OTH-F17',type:'f',label:"グローバルに働きたい",forward:"国際的なプロジェクトに携わり、異文化コミュニケーション能力とグローバルな視点を習得したいです。多言語環境やクロスボーダー業務を通じ、世界規模での競争力を持つ人材を目指しています。"},{id:'OTH-H18',type:'h',label:"やりがいがない",forward:"個人の思考力と創造性が活かされる業務環境を求めています。課題解決に主体的に取り組み、自分の判断と工夫が成果につながる実感を得られる職務を目指しています。"},{id:'OTH-F18',type:'f',label:"感謝されたい",forward:"自分の仕事がエンドユーザーにどのような価値をもたらすか、直接的なフィードバックを受けながら働きたいです。社会への貢献を実感できる、利用者との接点を持つ業務環境を重視しています。"},{id:'OTH-H19',type:'h',label:"出世競争に疲れた",forward:"透明性のある評価基準のもとで、実績と能力を正当に評価される環境を希望します。ポリティクスより実力を重視する企業文化のもとで、公正な競争環境での職務を求めています。"},{id:'OTH-F19',type:'f',label:"異なる職種を経験したい",forward:"組織内での配置転換による新しい職務経験を通じ、個人のスキルセットを拡張したいです。複数の職種での実務経験を積むことで、組織全体の視点を持つ総合的な人材に成長したいです。"},{id:'OTH-H20',type:'h',label:"女性としてキャリアが限定的",forward:"出産・育児後のキャリア復帰と継続的な成長が保証される企業環境を強く希望します。性別に関わらず、能力を最大限に発揮できる人事評価制度と組織文化を備えた企業での職務を目指しています。"},{id:'OTH-F20',type:'f',label:"成果を評価されたい",forward:"個人の成果が給与に直結する報酬体系のもとで、最大限のパフォーマンス発揮に取り組みたいです。公正な成果評価に基づく報酬設計により、動機づけと責任感を併せ持つ働き方を実現したいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"}]};
+var TRIGGER_LIB = {sekou:[{id:'SKN-F01',type:'f',label:"大きな案件に携わりたい",forward:"より大規模で複雑度の高い案件に携わり、施工管理としてのスケール感を広げることで、実務能力を高度化させたいと考えています。"},{id:'SKN-H01',type:'h',label:"残業が多すぎる",forward:"現在の勤務先では恒常的な時間外業務の中での対応を余儀なくされています。労働環境の改善と効率的な工程管理が実現できる現場での経験を重ねたいです。"},{id:'SKN-F02',type:'f',label:"発注者側に回りたい",forward:"ゼネコン施工管理での基礎経験を活かしながら、発注者やプロジェクトマネージャーとしての立場から、建築プロジェクト全体の企画・計画段階から竣工まで関わることで、より高度なプロジェクト経営スキルを習得したいと考えています。"},{id:'SKN-H02',type:'h',label:"休みがとれない",forward:"現職では工程短縮に対応するため休日出勤が頻繁でしたが、より計画的で持続可能な工程設定ができる職場環境での実践を望みます。"},{id:'SKN-F03',type:'f',label:"専門性を深めたい",forward:"複数工種での広範な経験をベースに、特定分野（〇〇工種）での専門的知見を深掘りし、その領域でのプロフェッショナルになりたいと考えています。"},{id:'SKN-H03',type:'h',label:"責任ばかり重い",forward:"現職では多重下請け構造の中で自律的な判断機会に限界がありました。より主体的な工程判断・品質判断ができるポジションでの経験を重ねたいです。"},{id:'SKN-F04',type:'f',label:"元請けで働きたい",forward:"これまでの下請け案件での経験を活かしつつ、元請けポジションで発注者との関係構築や全工程の統括責任を担い、施工管理職としての営為をより大きなスコープで展開したいと考えています。"},{id:'SKN-H04',type:'h',label:"現場の人間関係がつらい",forward:"現職では協力業者との関係構築が課題となる環境でしたが、相互尊重に基づいた協力体制を構築できる職場での実践を目指します。"},{id:'SKN-F05',type:'f',label:"上流工程に関わりたい",forward:"現在までの施工段階での経験に加え、企画・設計・監理まで一貫した工程を経験することで、施工管理としての視野を拡大し、建築生産全体への貢献を実現したいと考えています。"},{id:'SKN-H05',type:'h',label:"給料があがらない",forward:"現職では職務の重責に対して処遇評価が十分に反映されにくい構造でしたが、業績と個人の専門性が適正に評価される環境での実務を望みます。"},{id:'SKN-F06',type:'f',label:"施工品質を高めたい",forward:"これまでの経験の中で安全・品質リスクを実感してきたため、高度なセーフティマネジメントと品質保証体系を持つ組織での実践を通じて、自身の安全管理能力をさらに高めたいと考えています。"},{id:'SKN-H06',type:'h',label:"身体がもたない",forward:"現職での転勤頻度の高さから家族との時間が限定的でしたが、より地域密着型あるいは勤務地の安定性が高い環境での就業を希望しています。"},{id:'SKN-F07',type:'f',label:"資格をとりたい",forward:"施工管理技士資格の取得と活用を通じてキャリアの深化を図りたいと考えており、資格取得支援制度が充実した環境での専門性開発を希望しています。"},{id:'SKN-H07',type:'h',label:"上司と合わない",forward:"現職の組織文化においては適切なコミュニケーションと明確な指示系統の構築が課題でしたが、透明性と信頼に基づいた職場環境での実務経験を求めています。"},{id:'SKN-F08',type:'f',label:"特殊な工事に携わりたい",forward:"現在までの基盤的な実績をもとに、特定地域・特定工種での専門的実装機会を求め、キャリアの多様性を実現したいと考えています。"},{id:'SKN-H08',type:'h',label:"指示が二転三転する",forward:"現職での労働環境が身体への負荷となっているため、より衛生管理が整備された職場あるいは屋内施工が主体の環境での就業を希望しています。"},{id:'SKN-F09',type:'f',label:"チームを率いたい",forward:"これまでの個別案件での実績をベースに、複数メンバーから構成されるチームのマネジメントを通じて、リーダーシップとオーガナイゼーション能力をさらに開発したいと考えています。"},{id:'SKN-H09',type:'h',label:"給料に見合わない",forward:"現職での成長機会が限定的と感じるため、業界内での多様なキャリアパス（営業、管理部門、コンサル等）が開かれた環境でのキャリア発展を検討しています。"},{id:'SKN-F10',type:'f',label:"定時で帰りたい",forward:"現職での経験をふまえて、業務効率化とワークライフバランスを両立させた施工管理プロセスを実装できる環境での実務を通じて、持続可能で質の高いプロジェクト遂行を実現したいと考えています。"},{id:'SKN-H10',type:'h',label:"権限がない",forward:"現職では担当責務に対する適切な権限配分が不十分でしたが、実務的な判断権限を伴った施工管理ポジションでの責任遂行を望んでいます。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],sekkei:[{id:'SKK-H01',type:'h',label:"残業が多すぎる",forward:"ワークライフバランスと設計クオリティを両立できる環境を求めています。効率的な設計体制（BIM・チーム設計・決済フロー最適化）が整った職場で、質の高い設計業務に集中したいと考えています。"},{id:'SKK-F01',type:'f',label:"スキルを磨きたい",forward:"これまで意匠設計での経験を活かしつつ、構造・設備領域の知見を習得することで、統合的な設計提案ができる技術者を目指しています。"},{id:'SKK-H02',type:'h',label:"単純作業ばかり",forward:"設計者としてのキャリアを段階的に発展させるため、明確な職責設定と裁量権委譲がある組織環境を求めています。"},{id:'SKK-F02',type:'f',label:"大規模案件を担当したい",forward:"これまで小～中規模案件での設計経験を着実に積みました。次のキャリアステージでは、大規模施設や複数言語対応が必要な国際プロジェクトに挑戦したいと考えています。"},{id:'SKK-H03',type:'h',label:"提案が活かされない",forward:"設計者として社会的な実績評価を築きたいため、プロジェクトの対外発表（メディア・学会・展示）に積極的な企業文化を求めています。"},{id:'SKK-F03',type:'f',label:"設計の最後まで見たい",forward:"設計者として、概念設計から施工監理・竣工検査まで、プロジェクトサイクル全体に関わることで、自分の設計意図がいかに現実化するかを学びたいです。"},{id:'SKK-H04',type:'h',label:"給料が安い",forward:"建築設計職としてのキャリアを長期的に続けるためには、適正な経済的基盤が不可欠と考えています。給与テーブルと実績評価制度が透明で、専門性に見合った処遇が得られる環境で設計に専念したいです。"},{id:'SKK-F04',type:'f',label:"BIMで設計したい",forward:"設計効率化と質的高度化を実現する BIM・3D設計技術に強く関心があります。パラメトリック設計やクラウド協働体制の実践を通じ、次世代の設計プロセス標準化に貢献できる技術者を目指しています。"},{id:'SKK-H05',type:'h',label:"設計変更が多い",forward:"設計プロセスの安定性とクオリティ維持を重視しています。変更管理体制が整った環境で、予測可能な進捗管理のもと高品質な設計に従事したいと考えています。"},{id:'SKK-F05',type:'f',label:"環境配慮設計に取り組みたい",forward:"気候変動と建築の社会的責任に対する認識が深まり、環境性能と利用者満足を統合した設計に取り組みたいと考えています。ZEBやLCCM住宅など、サステナブル設計の専門性を高めていきたいです。"},{id:'SKK-H06',type:'h',label:"成長できていない",forward:"建築設計者としての専門性を深め、社会的責任を果たすため、1級建築士資格取得と継続教育（CPD）を組織的に支援する環境を求めています。"},{id:'SKK-F06',type:'f',label:"リノベーションしたい",forward:"既存建築の価値を再発見し、リノベーション設計を通じて建物の可能性を引き出す仕事に携わりたいと考えています。新築とは異なる既存躯体の制約を活かした設計力を身につけ、専門性を高めたいです。"},{id:'SKK-H07',type:'h',label:"施主対応がつらい",forward:"設計本来の創造的業務に集中できる環境を求めています。営業・事務と設計の役割分担が明確で、設計者が図面や品質に集中できる体制のもとで力を発揮したいと考えています。"},{id:'SKK-F07',type:'f',label:"有名な事務所で学びたい",forward:"建築設計における自分の美学と思考枠組みを確立するため、業界で高く評価されている設計事務所での実務経験を積みたいと考えています。優れた設計理念と手法を学び、設計者としてのアイデンティティを形成したいです。"},{id:'SKK-H08',type:'h',label:"経営が不安定",forward:"建築設計職としての長期キャリア形成には、組織の経営安定性と持続的な事業展開が不可欠と考えています。安定した経営基盤のもとで、設計者として腰を据えてキャリアを築いていきたいです。"},{id:'SKK-F08',type:'f',label:"様々な分野で設計したい",forward:"建築設計の知識を基盤としつつ、インテリア・ランドスケープまで統合した環境デザインに挑戦したいと考えています。複合領域設計アプローチを通じ、使い手にとって心地よい完成度の高い空間を創造したいです。"},{id:'SKK-H09',type:'h',label:"案件が限定的",forward:"現在の専門分野を深化させるとともに、異なる建築用途・地域・環境条件での実例経験を積むことで、普遍的な設計原理を習得したいと考えています。多様なプロジェクトポートフォリオの中で、専門技術の応用幅を広げたいです。"},{id:'SKK-F09',type:'f',label:"いずれ独立したい",forward:"将来的に自分のデザイン哲学を体現した設計活動を展開することを視野に、現在のキャリアステージでは設計の専門性を極めるとともに、プロジェクト経営・組織運営の経験を積むことが重要と考えています。"},{id:'SKK-H10',type:'h',label:"設計自由度がない",forward:"住宅設計での基礎経験を活かしつつ、より設計自由度の高い、またはプロジェクトの複雑性が高い建築領域に挑戦したいと考えています。商業施設・複合施設・公共建築の案件経験を通じ、設計思考の深化を目指しています。"},{id:'SKK-F10',type:'f',label:"使い手の反応が知りたい",forward:"建築設計者として、建築が完成した後の使い手の満足度や社会的インパクトまで責任を持つキャリアを志向しています。参加型設計・ユーザーリサーチ・コミュニティ連携のプロセスに関わることで、使い手に真摯に向き合う設計実践を積みたいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],cad:[{id:'CAD-H01',type:'h',label:"残業が多すぎる",forward:"設計プロセスの効率化やプロジェクト管理の最適化を通じて、働き方改革に貢献できる環境で、ワークライフバランスを実現したいと考えます。"},{id:'CAD-F01',type:'f',label:"BIM操作を習得したい",forward:"Revitを用いた3Dモデリングから施工図自動抽出、コスト管理まで一連の業務を経験することで、デジタル建築の専門家としての市場価値を高めたいです。"},{id:'CAD-H02',type:'h',label:"単調な作業ばかり",forward:"BIMモデリングや施工図作成など、より専門的で創造性を要する業務に携わり、建築知識を深めながら技術者としてのキャリアを構築したいです。"},{id:'CAD-F02',type:'f',label:"建築知識を深めたい",forward:"構造図・意匠図の融合、納まり詳細、施工工程を踏まえた施工図を作成することで、「建物の品質を決める職種」として専門家として認識されたいです。"},{id:'CAD-H03',type:'h',label:"単価が安い",forward:"スキルの高度化やBIM・積算などのマルチスキル習得により、市場価値を高めて、貢献度が適切に反映される職場環境で働きたいです。"},{id:'CAD-F03',type:'f',label:"単価の高い案件をやりたい",forward:"施工図やCAD図面から適正に数量拾いを行い、原価の見積根拠を理解することで、プロジェクトの経営側にも携わる専門家として、経営層との対話ができる立場を目指したいです。"},{id:'CAD-H04',type:'h',label:"雇用が不安定",forward:"正社員としての安定した雇用や、複数プロジェクトでの実績構築を通じて、長期的なキャリア設計が可能な環境で働きたいと考えます。"},{id:'CAD-F04',type:'f',label:"設計職に転向したい",forward:"設計補助の経験を通じて、意匠・構造・設備の統合的な設計思考を身に付け、資格取得や大学進学を経由して、設計者としてのキャリアへの道を開きたいです。"},{id:'CAD-H05',type:'h',label:"スキルが身につかない",forward:"Revit・ArchiCADなどの次世代BIMツールやプラント系CADを習得することで、業界トレンドに対応できる技術者になり、案件の幅を広げたいです。"},{id:'CAD-F05',type:'f',label:"多様なプロジェクトに関わりたい",forward:"CAD設計の段階から現場との連携を重視し、施工段階での課題を図面に反映させる実務経験を積むことで、実践的な建築知識と現場管理スキルを同時に習得したいです。"},{id:'CAD-H06',type:'h',label:"修正ばかり多い",forward:"施工図作成時に現場監督や職人と協力し、実装可能な図面を作成する過程で、建築現場の実務知識を深めながらコミュニケーション能力を養いたいです。"},{id:'CAD-F06',type:'f',label:"安定した環境で働きたい",forward:"クラウド型CADツールやBIMプラットフォームの導入により、リモートワークやフレックスタイムが実現可能な企業での業務を通じて、仕事と生活の調和を図りながらパフォーマンスを発揮したいです。"},{id:'CAD-H07',type:'h',label:"納期がきつい",forward:"フレックスタイムやリモート勤務導入企業での柔軟な就業、定期的な休息・ストレッチを含む健康管理体制の整った職場で、体調を整えながら働きたいです。"},{id:'CAD-F07',type:'f',label:"チームに入りたい",forward:"複数社での実務経験を積んで専門性と実績を深め、自身のポートフォリオを構築し、フリーランスとしての営業基盤を確立できる企業環境での修行期間を設けたいです。"},{id:'CAD-H08',type:'h',label:"労働環境が悪い",forward:"施工図技術者や設計士、積算士などの資格取得やマルチスキル化を通じて、明確なキャリアステップを描き、管理職や専門家としてのポジションを目指したいです。"},{id:'CAD-F08',type:'f',label:"スキルアップしたい",forward:"企業の資格取得支援制度（通信教育補助、試験休暇など）を活用し、建築士や積算士、認定BIMマネジャー資格を順次取得することで、専門資格保有者としての市場価値を確立したいです。"},{id:'CAD-H09',type:'h',label:"やりがいがない",forward:"ダイバーシティを重視し、心理的安全性の高い職場環境を整備している企業で、性別や年齢を問わずチームの一員として尊重される環境で働きたいです。"},{id:'CAD-F09',type:'f',label:"専門性を持ちたい",forward:"3Dビジュアライゼーション、VR建築提案、ドローン測量、CIM（建設情報モデル）など、建設DXの最前線に携わることで、業界変革の一員として技術者としての充実感を得たいです。"},{id:'CAD-H10',type:'h',label:"時給が上がらない",forward:"発注元企業での直接雇用やアウトソーシング企業での正社員化を通じて、中間マージン削減による適正賃金と、経営方針への直接的な関与機会を得たいです。"},{id:'CAD-F10',type:'f',label:"正社員になりたい",forward:"プラント設計、土木インフラ、造船設計など、異なる業界でのCADスキルを応用し、業界固有の専門知識を習得することで、複数領域で活躍できる汎用技術者を目指したいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],eigyo:[{id:'EGY-H01',type:'h',label:"ノルマが厳しい",forward:"お客様の課題を丁寧に掘り下げ、最適な提案を時間をかけて組み立てることで、真の信頼関係に基づいた長期的なご契約を実現したい。"},{id:'EGY-F01',type:'f',label:"根拠のある提案をしたい",forward:"お客様のニーズを深く理解し、課題を分析した上で最適なソリューションを提案し、信頼に基づいた長期的なパートナーシップを構築したい。"},{id:'EGY-H02',type:'h',label:"人付き合いが疲れた",forward:"顧客ニーズを事前に把握し、双方にとって有意義な対話の時間を作ることで、効果的で質の高い営業プロセスを確立したい。"},{id:'EGY-F02',type:'f',label:"顧客の信頼を勝ち取りたい",forward:"質の高い顧客層と向き合い、高度な提案スキルを駆使して、単価の大きい商談を積み重ねることで、営業としての専門性と成長を実感したい。"},{id:'EGY-H03',type:'h',label:"残業が多すぎる",forward:"顧客との面談時間を計画的に設定し、準備・企画・提案資料の作成に質的な時間を割き、仕事の効率性と提案クオリティの両立を実現したい。"},{id:'EGY-F03',type:'f',label:"商品力で売りたい",forward:"法人顧客との中長期的なパートナーシップを構築し、大型案件の提案から導入・運用支援まで、営業活動の幅と裁量を広げたい。"},{id:'EGY-H04',type:'h',label:"給料が歩合に左右される",forward:"成果と貢献度が明確に評価される安定した給与体系のもとで、腰を据えて中長期的な顧客基盤を構築し、スキル磨きに専念したい。"},{id:'EGY-F04',type:'f',label:"営業スキルを磨きたい",forward:"既存顧客との関係を深掘りし、ロイヤリティを高めることで、紹介と口コミに支えられた安定的な営業基盤を構築したい。"},{id:'EGY-H05',type:'h',label:"上司のやり方に納得できない",forward:"心理的安全性が確保された環境のもとで、失敗から学び、試行錯誤を重ねながら営業力を段階的に高めていきたい。"},{id:'EGY-F05',type:'f',label:"大型案件を扱いたい",forward:"営業現場で得たインサイトをデータ化し、マーケティング戦略や企画施策に反映させることで、営業と企画の連携を強化したい。"},{id:'EGY-H06',type:'h',label:"成果が評価されない",forward:"差別化されたプロダクト力と競争優位性を持つ商品の魅力を、説得力を持って顧客に訴求し、自信を持った営業活動を展開したい。"},{id:'EGY-F06',type:'f',label:"担当地域を広げたい",forward:"建築技術・不動産法務の深い知識を武器に、顧客の疑問に説得力を持って応答し、技術的差別化ができる営業人材として認識されたい。"},{id:'EGY-H07',type:'h',label:"顧客との関係が重い",forward:"成長志向が高く、相互に学び合える優秀な同僚と一緒に、チーム全体で営業目標を達成する充実感を経験したい。"},{id:'EGY-F07',type:'f',label:"チーム営業を体験したい",forward:"営業スキルと経験を次世代に継承し、チーム全体の成長を主導することで、組織への貢献と自己実現の両立を実現したい。"},{id:'EGY-H08',type:'h',label:"クレーム処理が多い",forward:"事前の丁寧な説明とアフターフォロー体制の充実により、顧客満足度を高め、リピートと紹介に結びつく信頼関係を構築したい。"},{id:'EGY-F08',type:'f',label:"業界知識を深めたい",forward:"国境を超えた営業活動を通じて、日本の建築・不動産プロダクトの価値を世界に訴求し、グローバル市場での営業経験を積みたい。"},{id:'EGY-H09',type:'h',label:"提案内容が気に入らない",forward:"営業活動に専念でき、顧客提案資料作成・市場分析・営業企画など付加価値の高い業務に時間を配分し、営業スキルを集中的に向上させたい。"},{id:'EGY-F09',type:'f',label:"営業企画に携わりたい",forward:"物件紹介だけに留まらず、融資・税務・相続対策など、顧客の資産形成全体を支援できるコンサルティング型営業を実践したい。"},{id:'EGY-H10',type:'h',label:"精神的に疲弊している",forward:"プロセス評価と成果評価の両面で適正に処遇される環境のもとで、同僚との建設的な協業関係を築きながら、安心感を持って営業活動に取り組みたい。"},{id:'EGY-F10',type:'f',label:"顧客満足度を高めたい",forward:"ブランド力と経営基盤が磐石の大手企業のもとで、社会的信用を背景にした営業活動を展開し、長期的なキャリア形成に集中したい。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"},{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],other:[{id:'OTH-H01',type:'h',label:"残業が多すぎる",forward:"現在の職場では業務量に対して人員配置が逼迫しており、ワークライフバランスと責任ある業務の両立ができる職場で、より質の高い成果を上げたいと考えています。"},{id:'OTH-F01',type:'f',label:"ものづくりがしたい",forward:"これまでの経験を通じ、物理的な成果物の完成に立ち会えることが大きなやりがいになることに気づきました。建設業界では、自分の携わった構造物が地域社会に貢献し、数十年単位で存続することに強い魅力を感じます。"},{id:'OTH-H02',type:'h',label:"給料があがらない",forward:"実績をもとに評価される、明確なキャリアパスのある環境に身を置きたいです。個人の成長が給与・職位に反映される仕組みがあれば、さらなるスキル習得に注力できます。"},{id:'OTH-F02',type:'f',label:"資格を取りたい",forward:"スキルポートフォリオを拡大し、市場価値の高い専門資格の取得を目指しています。新しい業界での実践的な経験を通じ、業界標準の資格取得支援制度を活用しながら、キャリアの基盤を構築したいです。"},{id:'OTH-H03',type:'h',label:"人間関係が悪い",forward:"互いを尊重し、心理的安全性が確保された職場環境を重視しています。チーム全体の目標達成に向け、透明性のあるコミュニケーションが取れる企業文化のもとで働きたいです。"},{id:'OTH-F03',type:'f',label:"社会に貢献したい",forward:"個人のスキルが地域社会の発展と生活基盤向上に直結する仕事環境を求めています。社会インフラの構築に参画することで、長期的で継続的な社会貢献を実現したいです。"},{id:'OTH-H04',type:'h',label:"転勤が多い",forward:"安定した勤務地での実務経験を通じ、深い現場知識と地域特性の理解を獲得できる環境を希望します。長期的なキャリア構築と生活基盤の安定が両立できる職場を探しています。"},{id:'OTH-F04',type:'f',label:"建設業の将来に賭けたい",forward:"日本の社会基盤更新ニーズが高まる今後10~20年、建設業は持続的な需要が見込まれます。産業の成長性と安定性の両面で、自分のキャリアを築く環境として最適と考えています。"},{id:'OTH-H05',type:'h',label:"精神的に疲弊している",forward:"心身の健全性を取り戻し、持続可能なペースで質の高い仕事ができる環境を優先します。適切な勤務時間、サポート体制のある職場で、再び仕事にやりがいを感じられるようになりたいです。"},{id:'OTH-F05',type:'f',label:"デジタル化に携わりたい",forward:"デジタル化が進む建設業界に身を置き、新しい技術スタックと実務の融合に関わることで、業界全体の効率化に貢献したいです。IT知識と現場経験の双方を活かせるポジションを目指しています。"},{id:'OTH-H06',type:'h',label:"成長できていない",forward:"多様な実務を通じて継続的にスキルを高められる環境を求めています。先輩からのメンタリングや公式な研修制度を活用し、1~2年で業界標準のスキルセットを習得したいです。"},{id:'OTH-F06',type:'f',label:"安定した環境で働きたい",forward:"長期的なキャリアプランを立てられる正社員として、安定した雇用基盤のもとで専門性を深めたいです。生活基盤の確保と職業スキルの蓄積を同時に実現できる環境を重視しています。"},{id:'OTH-H07',type:'h',label:"給料が安い",forward:"生活の安定を確保したうえで、自己投資や家族へのサポートができるレベルの報酬体系を求めています。自分の貢献度に見合った適切な給与条件のもとで、責任ある業務に取り組みたいです。"},{id:'OTH-F07',type:'f',label:"専門家になりたい",forward:"広い経験より、特定領域での深い専門性を体系的に磨きたいです。その分野のリーダーとして、組織・業界に貢献できるプロフェッショナルを目指し、継続的に学習・成長していく環境を求めています。"},{id:'OTH-H08',type:'h',label:"通勤が遠い",forward:"通勤時間の短縮によって、業務外の自己啓発や家族時間に充てられる時間を確保したいです。地元での就業により、仕事と生活の両立がより実現可能になると考えています。"},{id:'OTH-F08',type:'f',label:"マネジメントを学びたい",forward:"組織の成長と人材育成に責任を持つポジションにステップアップしたいです。自分のリーダーシップスタイルを確立しながら、チーム全体の目標達成と部下の成長を同時に実現できる環境を目指しています。"},{id:'OTH-H09',type:'h',label:"会社の方針が納得できない",forward:"法令遵守と企業倫理を最優先とする企業文化のもとで働きたいです。透明性のあるコンプライアンス体制と、全従業員の安全・尊厳を守る仕組みが整備された環境を強く希望しています。"},{id:'OTH-F09',type:'f',label:"環境配慮に取り組みたい",forward:"社会全体のサステナビリティ目標達成に貢献できる仕事を重視しています。環境負荷低減と経済性の両立を実現する建設プロジェクトに携わることで、次世代への責任を果たしたいです。"},{id:'OTH-H10',type:'h',label:"育児との両立が難しい",forward:"人生のこのステージでは、家族との時間と責任ある仕事の両立が最優先課題です。柔軟な勤務形態や介護休暇制度が充実した企業で、家族を支えながら職務を全うしたいです。"},{id:'OTH-F10',type:'f',label:"新しい分野に挑戦したい",forward:"これまでの経験を基盤としつつ、未知の領域への挑戦を通じて新たな視点と専門性を獲得したいです。新しい業界での初期段階から携わることで、異なる価値観や課題解決力を身につけたいと考えています。"},{id:'OTH-H11',type:'h',label:"差別がある",forward:"個人の能力と実績が公正に評価される、ダイバーシティを推進する組織文化を強く望みます。性別・年齢に関わらず、キャリアを構築できる透明性のある人事制度のある環境を選びたいです。"},{id:'OTH-F11',type:'f',label:"難しい案件に携わりたい",forward:"自分の能力と経験を最大限に発揮できるような、スケールの大きい・技術的難度の高いプロジェクトに携わりたいです。業界トップクラスの企業における難関案件での実績構築を目指しています。"},{id:'OTH-H12',type:'h',label:"利益重視が強い",forward:"顧客の長期的な満足と信頼構築を基盤とした、サステナブルなビジネスモデルの企業を目指しています。適切な利益率の中で、社会的責任と顧客価値を均衡させる経営スタンスの組織に貢献したいです。"},{id:'OTH-F12',type:'f',label:"柔軟に働きたい",forward:"多様な働き方を支援し、従業員の個人的事情と業務効率の両立を実現できる企業環境を求めています。柔軟な勤務形態による生産性向上と、よりよいワークライフバランスの実現を目指しています。"},{id:'OTH-H13',type:'h',label:"倫理観が合わない",forward:"利益と社会への責任の両立を掲げる企業で働きたいです。環境配慮、顧客価値向上、従業員の福利厚生向上を同時に追求できる経営姿勢の組織を重視しています。"},{id:'OTH-F13',type:'f',label:"安全衛生を重視したい",forward:"現場における安全文化の醸成と、労働環境の継続的改善に責任を持つポジションを目指しています。事故ゼロと従業員の心身の健全性を優先する組織で、システマティックな安全管理を推進したいです。"},{id:'OTH-H14',type:'h',label:"事務職に転換したい",forward:"これまでの現場経験を背景に、事務・企画・マネジメント領域でのキャリア転換を志しています。身体的負担と職務の難度のバランスを取りながら、長期的に職務を全うできる環境を求めています。"},{id:'OTH-F14',type:'f',label:"人を育てたい",forward:"自分が習得した知識・技能を体系的に後進に伝承し、業界全体の人材育成に貢献したいです。メンタリング機能を持つ環境で、人材育成システムの構築と実行に主導的に関わりたいです。"},{id:'OTH-H15',type:'h',label:"会社の将来性が見えない",forward:"安定した経営基盤と明確な成長戦略を持つ企業で、安心して長期的なキャリアを築きたいです。業界内での競争地位が強固で、従業員への投資を継続できる企業環境を優先しています。"},{id:'OTH-F15',type:'f',label:"いずれ独立したい",forward:"将来的な独立に向けて、体系的なビジネス知識と現場ネットワークを構築したいです。大規模な組織での実務経験を通じ、経営視点と実行力を磨き、自身のキャリアパスの選択肢を広げたいと考えています。"},{id:'OTH-H16',type:'h',label:"上司が信頼できない",forward:"有能で信頼できるリーダーのもとで、明確な指針と納得のいく指導を受けながら成長したいです。組織の意思決定が透明で、従業員の提案を真摯に受け止める経営層との信頼関係を重視しています。"},{id:'OTH-F16',type:'f',label:"副業をしたい",forward:"本業での専門性を深めつつ、個人プロジェクトや副業活動も推進できる柔軟な職場環境を求めています。複数のキャリアの相乗効果を生み出し、自分の総合的な市場価値を高めたいです。"},{id:'OTH-H17',type:'h',label:"専門性を高められない",forward:"長期的に特定分野の知識を深める機会を得られる環境を求めています。一つの領域での継続的な経験を通じ、業界内で認識される専門家としてのポジションを確立したいです。"},{id:'OTH-F17',type:'f',label:"グローバルに働きたい",forward:"国際的なプロジェクトに携わり、異文化コミュニケーション能力とグローバルな視点を習得したいです。多言語環境やクロスボーダー業務を通じ、世界規模での競争力を持つ人材を目指しています。"},{id:'OTH-H18',type:'h',label:"やりがいがない",forward:"個人の思考力と創造性が活かされる業務環境を求めています。課題解決に主体的に取り組み、自分の判断と工夫が成果につながる実感を得られる職務を目指しています。"},{id:'OTH-F18',type:'f',label:"感謝されたい",forward:"自分の仕事がエンドユーザーにどのような価値をもたらすか、直接的なフィードバックを受けながら働きたいです。社会への貢献を実感できる、利用者との接点を持つ業務環境を重視しています。"},{id:'OTH-H19',type:'h',label:"出世競争に疲れた",forward:"透明性のある評価基準のもとで、実績と能力を正当に評価される環境を希望します。ポリティクスより実力を重視する企業文化のもとで、公正な競争環境での職務を求めています。"},{id:'OTH-F19',type:'f',label:"異なる職種を経験したい",forward:"組織内での配置転換による新しい職務経験を通じ、個人のスキルセットを拡張したいです。複数の職種での実務経験を積むことで、組織全体の視点を持つ総合的な人材に成長したいです。"},{id:'OTH-H20',type:'h',label:"女性としてキャリアが限定的",forward:"出産・育児後のキャリア復帰と継続的な成長が保証される企業環境を強く希望します。性別に関わらず、能力を最大限に発揮できる人事評価制度と組織文化を備えた企業での職務を目指しています。"},{id:'OTH-F20',type:'f',label:"成果を評価されたい",forward:"個人の成果が給与に直結する報酬体系のもとで、最大限のパフォーマンス発揮に取り組みたいです。公正な成果評価に基づく報酬設計により、動機づけと責任感を併せ持つ働き方を実現したいです。"},{id:'CMN-L01',type:'l',label:"育休・産休",forward:"ライフイベントに伴い一時的にキャリアを中断しましたが、これまで培ってきた専門性を活かし、持続可能な働き方の中で再び業務に貢献していきたいと考えています。"},{id:'CMN-L02',type:'l',label:"介護対応",forward:"家族の状況に応じた柔軟な働き方ができる環境のもとで、安定して成果を出し続けられる職場を求めています。"},{id:'CMN-L03',type:'l',label:"配偶者転勤",forward:"新しい勤務地で、これまで培ってきた経験と専門性を活かして貢献できる環境を求めています。"}]};
 
 /* ========== 新スキーマ v2: 所属/役職 → 業務概要 → 職務内容 → 工事規模/構造 → 実績 ========== */
 var JOB_CONTENT_CAND={
@@ -1591,16 +1709,16 @@ var PR_TPL={
     '＜関係各所との円滑な折衝＞\n建築施工管理として、発注者・設計事務所・協力会社・職人さんとの間に立ち、各所の要望やスケジュールを整理しながら現場を進めてまいりました。情報共有を徹底し、トラブルを未然に防ぐことを心がけております。\n\n＜スケジュール管理能力＞\n複数の業種が同時進行する現場において、工程に遅延が出ないよう先回りした調整を行ってきました。天候や仕様変更にも柔軟に対応し、工期内の引渡しを継続しております。\n\n是非一度面接の機会を頂けますと幸いです。',
     '＜各業者とのコミュニケーション＞\n現場代理人として、協力会社・職人さんとの信頼関係構築を最も大切にしてきました。日々の朝礼・打合せで方針を共有し、安全で効率的な現場運営を実現しております。\n\n＜品質・安全管理＞\n担当現場において無事故・無災害を継続し、発注者検査・社内検査においても高い評価をいただいてまいりました。今まで培った経験を活かし、貴社の建築分野における品質向上に貢献いたします。\n\n是非一度面接の機会をいただけますと幸いです。',
     '＜顧客管理能力＞\n施主様・発注者様とのヒアリングを丁寧に行い、ご要望を施工計画に反映させることで、引渡し後の高い満足度につなげてまいりました。\n\n＜原価・VE提案＞\nコスト意識を持ち、品質を維持しながらのVE提案により、複数現場で目標利益率を達成しております。今まで培った関係各所を巻き込んでのチームワークと柔軟な対応力は、貴社における建築分野においても必ずお役に立てるものと考えております。\n\n是非一度面接の機会を頂けますと幸いです。'
-  ,{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],
+  ],
   sekkei:[
     '＜社内外でのコミュニケーションの徹底＞\n意匠設計者として、お施主様・構造担当・設備担当・現場監督との情報共有を徹底し、設計意図を正確に伝達しながら業務を進めてまいりました。問題が発生する前に相談・連絡を徹底し、担当タスクの遂行に努めております。\n\n＜業務経験＞\n基本設計から実施設計、確認申請、現場監理まで一貫して担当してきた経験があります。CADを利用した設計図の作成、関連法規に則った設計対応に自信があります。\n\n是非一度面接の機会を頂けますと幸いです。',
     '＜整理・調整する能力＞\n設計監理業務に長年携わる中で最も身につけたのは「整理・調整」する能力です。複数のプロジェクトを並行する中で、関係者との対話を重要視し、優先順位を明確にしながら業務を遂行してまいりました。\n\n＜法規・実務知識＞\n以下の関連法規に関する知識及び、法規に則った設計経験を有しております。プロジェクトを遂行する上で関係者との対話を重要視しています。\n\n是非一度面接の機会をいただけますと幸いです。',
     '＜お施主様への提案力＞\nお施主様からヒアリングを行い、ご要望を整理して最適なプランをご提案することを得意としております。プレゼン資料・3Dパース作成にも力を入れ、お客様の納得感を大切にしてきました。\n\n＜設計実務スキル＞\n意匠設計を中心に、基本設計・実施設計・施工図・確認申請まで対応可能です。CADを利用した設計図の作成、施工図の作成にも精通しております。\n\n是非一度面接の機会を頂けますと幸いです。'
-  ,{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],
+  ],
   eigyo:[
     '＜お客様との信頼関係構築＞\n住宅営業として、お客様一人ひとりのライフプランに寄り添うヒアリングと提案を実践してまいりました。資金計画から契約、引渡し後のアフターフォローまで一貫して担当し、リピート・ご紹介につなげております。\n\n＜目標達成への取組み＞\n年間売上目標に対する達成率を継続的に維持し、社内表彰経験もございます。貴社においても、培った経験を活かし即戦力として貢献いたします。\n\n是非一度面接の機会を頂けますと幸いです。',
     '＜新規開拓力＞\n反響営業・新規開拓の両方を経験し、お客様のニーズを引き出すヒアリング力には自信があります。市場分析と地域特性を踏まえたアプローチにより、安定した受注実績を積み重ねてまいりました。\n\n＜チームマネジメント＞\n部下育成や売上目標達成のための仕組みづくりにも取り組み、チーム全体の成果向上に貢献してまいりました。貴社の営業力強化に貢献したいと考えております。\n\n是非一度面接の機会をいただけますと幸いです。'
-  ,{id:'ALL-F-OTHER1',type:'f',label:'他の職種に就きたい',forward:'異なる職種での経験を通じて、視野を広げ自身の可能性を探りたいと考えています。'},{id:'ALL-F-OTHER2',type:'f',label:'大きな会社で働きたい',forward:'より規模の大きな組織で幅広い案件に携わり、スキルの幅を広げたいと考えています。'},{id:'ALL-L-HOME',type:'l',label:'地元に帰りたい',forward:'地元の建設業界に貢献しながら、家族との時間も大切にしたいと考えています。'},{id:'ALL-H-SALARY',type:'h',label:'給料・待遇に不満',forward:'実績や能力に見合った適正な評価・待遇を受けられる環境を求めています。'},{id:'ALL-H-OVERWORK',type:'h',label:'残業・休日出勤が多すぎる',forward:'適切なワークライフバランスの中で、持続的に高いパフォーマンスを発揮できる環境を求めています。'},{id:'ALL-H-RELATIONS',type:'h',label:'人間関係の問題',forward:'風通しの良い職場環境で、チームワークを活かした業務に取り組みたいと考えています。'},{id:'ALL-H-FUTURE',type:'h',label:'会社の将来性に不安',forward:'安定した経営基盤と成長性のある企業で、長期的なキャリアを築きたいと考えています。'},{id:'ALL-L-FAMILY',type:'l',label:'家庭の事情（介護・育児など）',forward:'家庭と両立可能な働き方ができる環境で、仕事にも全力で取り組みたいと考えています。'},{id:'ALL-L-HEALTH',type:'l',label:'体力・健康面の理由',forward:'自身の健康を維持しながら、経験を活かせる環境で長く活躍したいと考えています.'}],
+  ],
   other:[
     '＜実務経験と責任感＞\n建設業界における実務経験を活かし、現場や事務サイドから組織を支えてまいりました。与えられた業務を着実に遂行するとともに、改善提案や効率化にも積極的に取り組んでおります。\n\n＜コミュニケーション能力＞\nこれまで様々な年代の方々と接し、円滑に業務の進捗を図るため、「聞く力」「伝える力」「連携する力」の3つの力を軸として業務にあたってまいりました。\n\n是非一度面接の機会を頂けますと幸いです。'
   ]
@@ -1635,7 +1753,7 @@ var SKILL_TPL={
     {name:'事務系スキル型',body:'＜業務経験＞\n・建設会社での事務／総務／経理業務\n・工事原価管理、請求書処理\n・社内申請書類の作成・チェック\n・電話応対・来客対応'}
   ]
 };
-function skillTplLabels(cat){var a=SKILL_TPL[cat]||SKILL_TPL.other;return a.map(function(t){return t.name;});}
+function skillTplLabels(cat){var a=SKILL_TPL[cat]||SKILL_TPL.other;var r=[];for(var i=0;i<a.length;i++){if(a[i]&&a[i].name)r.push(a[i].name);}return r;}
 
 /* ---- PCスキル ----
    実データ頻出フォーマット（最頻出 52回 / 42回 / 41回）:
@@ -1764,9 +1882,7 @@ function questionsFor(idx){
 function saveCS(){
   var x;
   if(CS===1){
-    // 何もしない（プロフィール再利用案内のみ）
-  }else if(CS===2){
-    /* 合体Step2: 基本＋詳細を一気に保存 */
+    /* Step1: 職歴（基本＋詳細）を一気に保存 */
     var blocks=document.querySelectorAll('.cw-qblock');
     for(var i=0;i<blocks.length;i++){
       var b=blocks[i];
@@ -1825,12 +1941,12 @@ function saveCS(){
     savePrivateData();
     /* 職務経歴書プレビュー再描画（履歴書の志望動機には反映しない） */
     autoFillResumeMotivationFromLastWork();
-  }else if(CS===3){
+  }else if(CS===2){
     x=document.getElementById('csSkillsExp');if(x)CD.skillsExp=x.value;
     x=document.getElementById('csPcSkills');if(x)CD.pcSkills=x.value;
     var addCerts=document.getElementById('csCertOther');
     if(addCerts&&addCerts.value){var extras=addCerts.value.split(/[,、]/).map(function(s){return s.trim();}).filter(Boolean);for(var ei=0;ei<extras.length;ei++){if(CD.certs.indexOf(extras[ei])===-1)CD.certs.push(extras[ei]);}}
-  }else if(CS===4){
+  }else if(CS===3){
     x=document.getElementById('csSummary');if(x){CD.summary=x.value;CD.summaryAuto=false;}
     x=document.getElementById('csPR');if(x)CD.pr=x.value;
   }
@@ -1840,22 +1956,141 @@ function saveCS(){
 /* 自動 職務要約 生成 */
 function autoSummary(){
   if(!CD.works.length)return '';
+  var catName={sekou:'施工管理',sekkei:'設計',cad:'CAD・BIM',eigyo:'営業',jimu:'事務',other:'建設業務'};
   /* 古い順（ASC） */
   var sorted=CD.works.slice().filter(function(w){return w.company;}).sort(function(a,b){return (a.from||'').localeCompare(b.from||'');});
   if(!sorted.length)return '';
+  /* 総経験年数 */
   var totalMonths=0;
   for(var i=0;i<sorted.length;i++)totalMonths+=tenureMonths(sorted[i]);
-  var years=Math.floor(totalMonths/12);
-  var cats={};for(var i=0;i<sorted.length;i++){var c=sorted[i].jobCat||'other';cats[c]=(cats[c]||0)+1;}
-  var catName={sekou:'施工管理',sekkei:'設計',cad:'CAD・BIM',eigyo:'営業',other:'建設業務'};
-  var mainCat='other',maxC=0;for(var c in cats)if(cats[c]>maxC){maxC=cats[c];mainCat=c;}
+  var totalYears=Math.round(totalMonths/12);
   var first=sorted[0];
   var latest=sorted[sorted.length-1];
+  /* 職種別の年数を集計 */
+  var catYrs={};
+  for(var i=0;i<sorted.length;i++){
+    var c=sorted[i].jobCat||'other';
+    var m=tenureMonths(sorted[i]);
+    catYrs[c]=(catYrs[c]||0)+Math.round(m/12);
+  }
+  /* 全社の物件用途を集約 */
+  var uses=[];
+  var useKW=['マンション','戸建','住宅','事務所','店舗','工場','倉庫','物流','病院','ホテル','学校','商業施設'];
+  for(var i=0;i<sorted.length;i++){
+    var ss=sorted[i].scaleStructChecks||[];
+    for(var j=0;j<ss.length;j++){
+      if(typeof ss[j]!=='string')continue;
+      for(var uk=0;uk<useKW.length;uk++){if(ss[j].indexOf(useKW[uk])!==-1&&uses.indexOf(useKW[uk])===-1)uses.push(useKW[uk]);}
+    }
+  }
+  /* 全社の構造を集約 */
+  var structs=[];
+  var structKW=['木造','RC造','S造','SRC造'];
+  for(var i=0;i<sorted.length;i++){
+    var ss=sorted[i].scaleStructChecks||[];
+    for(var j=0;j<ss.length;j++){
+      if(typeof ss[j]!=='string')continue;
+      for(var sk=0;sk<structKW.length;sk++){if(ss[j].indexOf(structKW[sk])!==-1&&structs.indexOf(structKW[sk])===-1)structs.push(structKW[sk]);}
+    }
+  }
+  /* 最大延床面積 */
+  var maxArea=0;
+  for(var i=0;i<sorted.length;i++){
+    var projs=sorted[i].projects||[];
+    for(var p=0;p<projs.length;p++){var a=parseInt(projs[p].area,10)||0;if(a>maxArea)maxArea=a;}
+  }
+  /* 希望職種 */
+  var hopeCat=inferJobCatFromRole(TARGET_COMPANY.job)||'other';
+  /* ---- 文章組み立て ---- */
   var s='';
+  /* 1文目: 開始年＋総年数 */
   if(first.from){var yr=String(first.from).split('-')[0];if(yr)s+=yr+'年より';}
-  s+='建設業界において'+catName[mainCat]+'業務に約'+years+'年間従事してまいりました。';
-  s+='これまでに'+sorted.length+'社を経験し、';
-  if(latest.company)s+='現在は'+latest.company+'にて'+catName[latest.jobCat||'other']+'を担当しております。';
+  s+='建設業界にて'+totalYears+'年の経験を有しております。';
+  /* 2文目: キャリアの流れ（同職種連続は合算・役職表示あり） */
+  var flowParts=[];
+  var gi=0;
+  while(gi<sorted.length){
+    var gStart=gi;
+    var gCat=sorted[gi].jobCat||'other';
+    /* 同じ職種が連続する会社をグループ化 */
+    while(gi+1<sorted.length&&(sorted[gi+1].jobCat||'other')===gCat)gi++;
+    var gMonths=0;var gUses=[];var gRole='';
+    var gIndLabels=[];
+    for(var k=gStart;k<=gi;k++){
+      gMonths+=tenureMonths(sorted[k]);
+      var wss=sorted[k].scaleStructChecks||[];
+      for(var j=0;j<wss.length;j++){
+        if(typeof wss[j]!=='string')continue;
+        for(var uk=0;uk<useKW.length;uk++){if(wss[j].indexOf(useKW[uk])!==-1&&gUses.indexOf(useKW[uk])===-1)gUses.push(useKW[uk]);}
+      }
+      if(sorted[k].roleName)gRole=sorted[k].roleName;
+      var il=sorted[k].companyIndustry||'';
+      if(il&&gIndLabels.indexOf(il)===-1)gIndLabels.push(il);
+    }
+    var gYrs=Math.round(gMonths/12);
+    var wCat=catName[gCat]||'業務';
+    var part='';
+    if(gIndLabels.length>=1)part+=gIndLabels.join('・')+'にて';
+    else if(gStart===gi&&sorted[gStart].company)part+=sorted[gStart].company+'にて';
+    if(gUses.length>0)part+=gUses.slice(0,3).join('・')+'等の';
+    part+=wCat;
+    if(gYrs>0)part+='に'+gYrs+'年間従事';
+    else part+='に従事';
+    flowParts.push(part);
+    gi++;
+  }
+  if(flowParts.length>0){
+    /* 最後の会社は「現在は〜」にする */
+    if(flowParts.length>=2){
+      s+=flowParts.slice(0,-1).join('した後、')+'した後、';
+      var lastIsPresent=!latest.to;
+      if(lastIsPresent)s+='現在は'+flowParts[flowParts.length-1]+'しております。';
+      else s+=flowParts[flowParts.length-1]+'いたしました。';
+    } else {
+      s+=flowParts[0]+'しております。';
+    }
+  }
+  /* 3文目: 規模感＋希望職種に合わせた強み */
+  var scalePhrase='';
+  if(structs.length>0&&maxArea>0){
+    scalePhrase+=structs.join('・')+'、延床'+Number(maxArea).toLocaleString()+'㎡規模までの案件経験があり、';
+  } else if(structs.length>0){
+    scalePhrase+=structs.join('・')+'の案件経験があり、';
+  }
+  /* 希望職種に合わせた締めの強み */
+  var SUMMARY_STRENGTH={
+    'sekou':'工程・品質・安全・原価の管理を一体で遂行できることが強みです。',
+    'sekkei':'設計から現場監理まで一貫した業務遂行が強みです。',
+    'cad':'正確かつスピーディーな図面作成と現場理解が強みです。',
+    'eigyo':'技術知識に裏打ちされた提案力が強みです。',
+    'other':'幅広い実務経験を活かした業務遂行が強みです。'
+  };
+  /* 複数職種経験者の場合、クロススキルを強みにする */
+  var catKeys=[];for(var c in catYrs){if(catYrs[c]>0)catKeys.push(c);}
+  var strengthPhrase='';
+  if(catKeys.length>=2&&catKeys.indexOf(hopeCat)!==-1){
+    /* 希望職種以外で最も長い経験 */
+    var subCat='';var subMax=0;
+    for(var c in catYrs){if(c!==hopeCat&&catYrs[c]>subMax){subMax=catYrs[c];subCat=c;}}
+    if(subCat){
+      strengthPhrase=(catName[subCat]||'')+'の経験と'+(catName[hopeCat]||'')+'の両面を理解した業務遂行が強みです。';
+    }
+  }
+  if(!strengthPhrase)strengthPhrase=SUMMARY_STRENGTH[hopeCat]||SUMMARY_STRENGTH['other'];
+  s+=scalePhrase+strengthPhrase;
+  /* 役職（マネジメント）経験を末尾に1文追加 */
+  var latestRole='';var pastRole='';
+  for(var i=0;i<sorted.length;i++){
+    if(sorted[i].roleName){
+      if(i===sorted.length-1)latestRole=sorted[i].roleName;
+      else pastRole=sorted[i].roleName;
+    }
+  }
+  if(latestRole){
+    s+='直近では'+latestRole+'としてマネジメント業務に携わりました。';
+  }else if(pastRole){
+    s+='また、'+pastRole+'としてマネジメント業務の経験もあります。';
+  }
   return s;
 }
 
@@ -1908,6 +2143,25 @@ function buildWorkStrengthSummary(w){
 /* D. 前向き構文プレビュー（職務経歴書の転職理由に使用）
    isLast=true: 最終社→現在進行形（「次のキャリアへの意欲」）
    isLast=false: 過去の転職→過去完了形（「〜転職。」） */
+/* 自由記入の短文を前向き構文に変換 */
+function buildFreeForward(text,isLast){
+  if(!text)return '...';
+  var t=text.replace(/\s+/g,'').replace(/。$/,'');
+  /* 既に十分な長さの文章(40文字以上)はそのまま使用 */
+  if(t.length>=40)return isLast?text:t.replace(/ています$/,'').replace(/ます$/,'').replace(/です$/,'').replace(/。$/,'')+'と考え転職。';
+  /* 短文パターン分析 */
+  if(isLast){
+    if(/たい$/.test(t))return t+'と考え、そのような環境で経験を積みたいと考えています。';
+    if(/ない$|悪い$|辛い$|つらい$|きつい$|多い$|少ない$|低い$|重い$/.test(t))return '現職では'+t+'状況にあり、より良い環境で力を発揮したいと考えています。';
+    if(/だ$|である$/.test(t))return t.replace(/だ$|である$/,'')+'であるため、新たな環境での実践を目指しています。';
+    return t+'を実現するため、新たな環境での実践を目指しています。';
+  }else{
+    if(/たい$/.test(t))return t+'と考え転職。';
+    if(/ない$|悪い$|辛い$|つらい$|きつい$|多い$|少ない$|低い$|重い$/.test(t))return t+'ため、環境改善を求め転職。';
+    if(/だ$|である$/.test(t))return t.replace(/だ$|である$/,'')+'を求め転職。';
+    return t+'を目指し転職。';
+  }
+}
 function buildForwardPreview(w,isLast){
   if(!w.triggerId&&!w.triggerFree)return '（①を入力するとここに自動生成されます）';
   var trigCat=w.jobCat||'other';
@@ -1916,27 +2170,49 @@ function buildForwardPreview(w,isLast){
   for(var j=0;j<trigList.length;j++){
     if(trigList[j].id===w.triggerId){trigger=trigList[j];break;}
   }
-  if(!trigger)return w.triggerFree||'...';
+  /* トリガー未選択＋自由記入のみ → 前向き構文に変換 */
+  if(!trigger)return buildFreeForward(w.triggerFree,isLast);
   if(isLast){
-    /* 最終社: 現在進行形（志望動機として使用） */
+    /* 最終社: 現在進行形 */
     return trigger.forward+(w.triggerFree?' '+w.triggerFree:'');
   }else{
-    /* 過去の転職: 過去完了形 */
-    var base=trigger.forward
-      .replace(/たいと考えています。$/,'たいと考え')
-      .replace(/を目指しています。$/,'を目指し')
-      .replace(/と考えています。$/,'と考え')
-      .replace(/望みます。$/,'望み')
-      .replace(/重ねたいです。$/,'重ねたく')
-      .replace(/たいです。$/,'たく')
-      .replace(/ています。$/,'')
-      .replace(/ます。$/,'')
-      .replace(/です。$/,'')
+    /* 過去の転職: 2文以上ある場合は最後の1文だけ使い簡潔にする */
+    var sentences=trigger.forward.split('。').filter(function(s){return s.trim();});
+    var src=sentences.length>1?sentences[sentences.length-1].trim():trigger.forward.replace(/。$/,'');
+    /* 長すぎる場合、段階的に短縮 */
+    if(src.length>50){
+      var cutMatch=src.match(/(?:ことで、|を通じて、|ため、|ながら、|として、)(.{10,})$/);
+      if(cutMatch)src=cutMatch[1];
+    }
+    /* それでも60字超なら、最後の「、」以降を使う（10字以上ある場合） */
+    if(src.length>60){
+      var lastComma=src.lastIndexOf('、');
+      if(lastComma>0&&src.length-lastComma>10)src=src.substring(lastComma+1);
+    }
+    /* 現在形→連用形に変換（全パターン） */
+    var base=src
+      .replace(/たいと考えています$/,'たい')
+      .replace(/を目指しています$/,'を目指し')
+      .replace(/と考えています$/,'と考え')
+      .replace(/を求めています$/,'を求め')
+      .replace(/を希望しています$/,'を希望し')
+      .replace(/たいと考えます$/,'たい')
+      .replace(/望みます$/,'望み')
+      .replace(/たいです$/,'たい')
+      .replace(/を感じます$/,'を感じ')
+      .replace(/ています$/,'')
+      .replace(/ます$/,'')
+      .replace(/です$/,'')
       .replace(/。$/,'');
+    /* 末尾に応じて自然な接続で「転職。」をつける */
+    var suffix;
+    if(/と考え$|を求め$|を目指し$|を希望し$|を望み$|を感じ$/.test(base))suffix='転職。';
+    else if(/たい$/.test(base))suffix='と考え転職。';
+    else suffix='と考え転職。';
     if(w.triggerFree){
       return base+'、'+w.triggerFree;
     }else{
-      return base+'と考え転職。';
+      return base+suffix;
     }
   }
 }
@@ -1993,55 +2269,7 @@ function drawCS(){
   nb.textContent=(CS===CM)?'完成':'次へ →';
   var h='';
   if(CS===1){
-    h='<h3>STEP 1: はじめに</h3>';
-    h+='<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:14px;margin-bottom:14px;font-size:13px;line-height:1.6">';
-    h+='<strong style="color:#2BA84A">📊 AIサポートの仕組み</strong><br>';
-    h+='2,495件の建設業履歴書・職務経歴書データ（履歴書1,275件 / 職務経歴書939件）を学習したAIが、あなたの<strong>職種</strong>と<strong>在籍期間</strong>に応じて最適な質問を自動生成します。<br><br>';
-    h+='<strong>① 直近の会社</strong>と<strong>② 在籍期間が長い会社</strong>を優先的に深掘りし、A4 2枚に最適化された職務経歴書を作成します。';
-    h+='</div>';
-    h+='<div style="background:#f0f8ff;border:1px solid #b8d4ea;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.6">';
-    h+='<strong style="color:#1976d2">📈 学習データ内訳（実数値）</strong><br>';
-    h+='・職種別: 施工管理 '+DATA_INSIGHTS.byCat.sekou+'件 / 設計 '+DATA_INSIGHTS.byCat.sekkei+'件 / 営業 '+DATA_INSIGHTS.byCat.eigyo+'件 / その他 '+DATA_INSIGHTS.byCat.other+'件<br>';
-    h+='・頻出資格TOP5: ';
-    h+=DATA_INSIGHTS.topCerts.slice(0,5).map(function(c){return c[0]+'('+c[1]+')';}).join(' / ');
-    h+='<br>・頻出ソフト: ';
-    h+=DATA_INSIGHTS.topSoft.slice(0,6).map(function(c){return c[0]+'('+c[1]+')';}).join(' / ');
-    h+='<br><span style="color:#666;font-size:11px">※ 質問の選択肢順序・テンプレ文言・自己PR構成すべてに反映済み</span>';
-    h+='</div>';
-    h+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.6">';
-    h+='<strong style="color:#f57c00">🔗 ペア相関分析（同一人物の履歴書↔職務経歴書 '+PAIR_INSIGHTS.nPairs+'ペア）</strong><br>';
-    h+='・職種カテゴリー一致率: '+PAIR_INSIGHTS.catMatchRate+'%（残り41%は転身パターン）<br>';
-    h+='・最頻出転身: <strong>設計→施工管理</strong>('+transitionCount('sekkei','sekou')+'件)、その他→施工管理('+transitionCount('other','sekou')+'件)<br>';
-    h+='・現職在籍中での転職活動: '+PAIR_INSIGHTS.ongoingRate+'%<br>';
-    h+='・職務経歴書のページ数: 2ページ '+PAIR_INSIGHTS.pageDist[2]+'% / 3ページ '+PAIR_INSIGHTS.pageDist[3]+'% / 1ページ '+PAIR_INSIGHTS.pageDist[1]+'%<br>';
-    h+='・平均文字数: 履歴書 '+PAIR_INSIGHTS.avgLenResume+'字 / 職務経歴書 '+PAIR_INSIGHTS.avgLenCareer+'字（'+(PAIR_INSIGHTS.avgLenCareer/PAIR_INSIGHTS.avgLenResume).toFixed(1)+'倍）';
-    h+='</div>';
-    h+='<div style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px">';
-    h+='💡 履歴書をすでに作成されている場合、職歴・資格情報は自動で引き継がれます。<br>';
-    if(CD.works.length>0&&CD.works[0].company){
-      h+='<span style="color:#2BA84A;font-weight:bold">✓ '+CD.works.filter(function(w){return w.company;}).length+'社の職歴を引き継ぎました</span>';
-    }else{
-      h+='<span style="color:#999">職歴未入力です。次のステップで入力してください。</span>';
-    }
-    h+='</div>';
-    h+='<div style="font-size:13px;line-height:1.8;color:#555">';
-    h+='<strong>作成の流れ:</strong><br>';
-    h+='Step 1: はじめに（このページ）<br>';
-    h+='Step 2: 職歴（基本＋詳細 5項目を古い順に入力）<br>';
-    h+='Step 3: 活かせる経験・スキル・資格<br>';
-    h+='Step 4: 職務要約・自己PR<br>';
-    h+='Step 5: 確認・PDF出力';
-    h+='</div>';
-    /* デバッグ: JSONインポート/エクスポート */
-    h+='<details style="margin-top:14px;border:1px dashed #bbb;border-radius:6px;padding:8px"><summary style="cursor:pointer;font-size:12px;color:#1976d2">🛠 デバッグ: JSONインポート/エクスポート</summary>';
-    h+='<div style="font-size:11px;color:#666;margin:6px 0">履歴書＋職務経歴書データを一括で投入/取出しできます。</div>';
-    h+='<textarea id="dbgJson" rows="6" style="width:100%;font-size:10px;font-family:monospace;box-sizing:border-box" placeholder="{&quot;RD&quot;:{...},&quot;CD&quot;:{...}}"></textarea>';
-    h+='<div style="margin-top:6px"><span class="template-btn" onclick="dbgExport()">📤 現在データを出力</span> ';
-    h+='<span class="template-btn" onclick="dbgImport()">📥 上のJSONを投入</span> ';
-    h+='<span class="template-btn" onclick="dbgLoadSample()">📋 サンプル投入</span></div>';
-    h+='</details>';
-  }else if(CS===2){
-    h='<h3>STEP 2: 職歴（基本＋詳細）</h3>';
+    h='<h3>STEP 1: 職歴（基本＋詳細）</h3>';
     h+='<p style="font-size:12px;color:#666;margin-bottom:10px">🕰 <strong>古い企業から順に</strong>入力してください。各社の基本情報と詳細（所属／業務概要／職務内容／工事規模／実績）をまとめて入力します。</p>';
     var structOpts=['木造','RC造','S造','SRC造','木造軸組','2×4','PC造','混構造'];
     var emps=['正社員','契約社員','派遣社員','嘱託','パート・アルバイト','業務委託'];
@@ -2107,7 +2335,8 @@ function drawCS(){
       h+='</div>';
 
       /* ③ 職務内容 */
-      var jcCand=JOB_CONTENT_CAND[cat]||JOB_CONTENT_CAND.other;
+      var jcCandRaw=JOB_CONTENT_CAND[cat]||JOB_CONTENT_CAND.other;
+      var jcCand=[];for(var _fc=0;_fc<jcCandRaw.length;_fc++){if(typeof jcCandRaw[_fc]==='string')jcCand.push(jcCandRaw[_fc]);}
       var jcArr=w.jobContentChecks||[];
       h+='<div style="background:#f0faf1;padding:8px;border-radius:6px;margin-bottom:8px">';
       h+='<div style="font-size:12px;font-weight:bold;color:#2BA84A;margin-bottom:4px">③ 職務内容（'+catLbl+'向け候補・該当チェック＋自由記入）</div>';
@@ -2121,7 +2350,8 @@ function drawCS(){
       h+='</div>';
 
       /* ④ 工事規模/構造 */
-      var ssCand=SCALE_STRUCT_CAND[cat]||SCALE_STRUCT_CAND.other;
+      var ssCandRaw=SCALE_STRUCT_CAND[cat]||SCALE_STRUCT_CAND.other;
+      var ssCand=[];for(var _fs=0;_fs<ssCandRaw.length;_fs++){if(typeof ssCandRaw[_fs]==='string')ssCand.push(ssCandRaw[_fs]);}
       var ssArr=w.scaleStructChecks||[];
       if(ssCand.length){
         h+='<div style="background:#f0faf1;padding:8px;border-radius:6px;margin-bottom:8px">';
@@ -2157,12 +2387,13 @@ function drawCS(){
         h+='<div class="form-group" style="margin:0"><label style="font-size:10px">③ 契約金（万円）</label><input class="cw-pr-cost" value="'+esc(pr.cost||'')+'" placeholder="15000" oninput="saveCS()"></div>';
         h+='<div class="form-group" style="margin:0"><label style="font-size:10px">④ 延床面積（㎡）</label><input class="cw-pr-area" value="'+esc(pr.area||'')+'" placeholder="2500" oninput="saveCS()"></div>';
         h+='</div>';
-        h+='<div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">';
+        h+='<div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-bottom:4px">';
         h+='<div class="form-group" style="margin:0"><label style="font-size:10px">⑤ 構造</label><select class="cw-pr-struct" onchange="saveCS()"><option value="">選択</option>';
         for(var sj=0;sj<structOpts.length;sj++)h+='<option value="'+structOpts[sj]+'"'+(pr.struct===structOpts[sj]?' selected':'')+'>'+structOpts[sj]+'</option>';
-        h+='</select><input class="cw-pr-structfree" value="'+esc(pr.structFree||'')+'" placeholder="自由記入（任意）" oninput="saveCS()" style="margin-top:4px"></div>';
+        h+='</select></div>';
         h+='<div class="form-group" style="margin:0"><label style="font-size:10px">⑥ 階数</label><input class="cw-pr-floors" value="'+esc(pr.floors||'')+'" placeholder="地上10階" oninput="saveCS()"></div>';
         h+='</div>';
+        h+='<div class="form-group" style="margin:0"><label style="font-size:10px">⑦ 自由記入（任意）</label><input class="cw-pr-structfree" value="'+esc(pr.structFree||'')+'" placeholder="補足事項があれば記入" oninput="saveCS()"></div>';
         h+='</div>';
       }
       h+='<button type="button" class="add-btn" onclick="addProject('+i+')" style="margin-top:4px">＋ 実績を追加</button>';
@@ -2210,24 +2441,11 @@ function drawCS(){
       h+='<strong>🤖 AI予測:</strong> '+nValid+'社経験 → 職務経歴書は<strong>約'+predPg+'ページ</strong>';
       h+='</div>';
     }
-  }else if(CS===3){
-    h='<h3>STEP 4: 活かせる経験・スキル / 資格</h3>';
+  }else if(CS===2){
+    h='<h3>STEP 2: 保有資格 / PCスキル</h3>';
     var mainCat='other',cnt={};
     for(var i=0;i<CD.works.length;i++){var c=CD.works[i].jobCat||'other';cnt[c]=(cnt[c]||0)+1;}
     var maxC=0;for(var c in cnt)if(cnt[c]>maxC){maxC=cnt[c];mainCat=c;}
-    h+='<div class="form-group"><label>活かせる経験・知識・スキル <span style="font-size:11px;color:#666">※テンプレ複数あり・組合せ可</span></label>';
-    h+='<div style="font-size:12px;color:#555;margin-bottom:4px">'+{sekou:'施工管理',sekkei:'設計',eigyo:'営業',other:'その他'}[mainCat]+'カテゴリのテンプレ（クリックで挿入／既存内容に追記）：</div>';
-    h+='<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px">';
-    var stpls=SKILL_TPL[mainCat]||SKILL_TPL.other;
-    for(var ti=0;ti<stpls.length;ti++){
-      h+='<span class="template-btn" onclick="appendCTpl(\'skillsExp\',\''+mainCat+'\','+ti+')">📋 '+esc(stpls[ti].name)+'</span>';
-    }
-    h+='<span class="template-btn" onclick="document.getElementById(\'csSkillsExp\').value=\'\';saveCS()" style="background:#fff3f3">🗑 クリア</span>';
-    h+='</div>';
-    h+='<textarea id="csSkillsExp" rows="7" oninput="saveCS()" placeholder="箇条書きで記入してください（複数テンプレを組み合わせOK）">'+esc(CD.skillsExp||'')+'</textarea></div>';
-    h+='<div class="form-group"><label>PCスキル・使用ソフト</label>';
-    h+='<div style="margin-bottom:6px"><span class="template-btn" onclick="useCTpl(\'pcSkills\','+JSON.stringify(PCSKILL_TPL[mainCat]).replace(/"/g,'&quot;')+')">📋 テンプレを挿入</span></div>';
-    h+='<textarea id="csPcSkills" rows="3" oninput="saveCS()" placeholder="例: AutoCAD（実務5年）、Excel、Word">'+esc(CD.pcSkills||'')+'</textarea></div>';
     h+='<div class="form-group"><label>保有資格</label>';
     h+='<div style="font-size:12px;color:#666;margin-bottom:6px">履歴書で選択した資格が引き継がれます。追加・編集はこちら：</div>';
     if(CD.certs&&CD.certs.length){
@@ -2236,8 +2454,11 @@ function drawCS(){
       h+='</div>';
     }
     h+='<input id="csCertOther" value="" oninput="saveCS()" placeholder="追加資格があれば入力（カンマ区切り可）"></div>';
-  }else if(CS===4){
-    h='<h3>STEP 4: 職務要約 / 自己PR</h3>';
+    h+='<div class="form-group"><label>PCスキル・使用ソフト</label>';
+    h+='<div style="margin-bottom:6px"><span class="template-btn" onclick="useCTpl(\'pcSkills\','+JSON.stringify(PCSKILL_TPL[mainCat]).replace(/"/g,'&quot;')+')">📋 テンプレを挿入</span></div>';
+    h+='<textarea id="csPcSkills" rows="3" oninput="saveCS()" placeholder="例: AutoCAD（実務5年）、Excel、Word">'+esc(CD.pcSkills||'')+'</textarea></div>';
+  }else if(CS===3){
+    h='<h3>STEP 3: 職務要約 / 自己PR</h3>';
     var auto=autoSummary();
     h+='<div class="form-group"><label>職務要約 <span style="font-size:11px;color:#666">※AI自動生成済み・編集可</span></label>';
     if(CD.summaryAuto&&!CD.summary)CD.summary=auto;
@@ -2246,10 +2467,9 @@ function drawCS(){
     var mainCat='other',cnt2={};
     for(var i=0;i<CD.works.length;i++){var c=CD.works[i].jobCat||'other';cnt2[c]=(cnt2[c]||0)+1;}
     var maxC=0;for(var c in cnt2)if(cnt2[c]>maxC){maxC=cnt2[c];mainCat=c;}
-    h+='<div class="form-group"><label>自己PR <span style="font-size:11px;color:#666">※カテゴリ別テンプレあり / 応募先から自動生成</span></label>';
+    h+='<div class="form-group"><label>自己PR</label>';
     h+='<div style="background:#f0faf1;border:1px solid #c8e6c9;border-radius:8px;padding:14px;margin-bottom:10px">';
-    h+='<div style="font-size:13px;font-weight:bold;color:#2BA84A;margin-bottom:8px">応募先企業から自己PRを自動生成</div>';
-    h+='<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">応募先企業名</label><input id="tgtCompanyName2" value="'+esc(TARGET_COMPANY.name||'')+'" placeholder="例: 大成建設" oninput="TARGET_COMPANY.name=this.value" style="padding:7px;font-size:13px"></div>';
+    h+='<div style="font-size:13px;font-weight:bold;color:#2BA84A;margin-bottom:8px">応募先と経歴から自己PRを自動生成</div>';
     h+='<div class="inline-group">';
     h+='<div class="form-group"><label style="font-size:12px">業種</label><select id="tgtIndustry2" onchange="TARGET_COMPANY.industry=this.value" style="padding:7px;font-size:13px"><option value="">選択</option>';
     for(var ii=0;ii<INDUSTRY_OPTS.length;ii++){h+='<option value="'+INDUSTRY_OPTS[ii]+'"'+(TARGET_COMPANY.industry===INDUSTRY_OPTS[ii]?' selected':'')+'>'+INDUSTRY_OPTS[ii]+'</option>';}
@@ -2257,10 +2477,11 @@ function drawCS(){
     h+='<div class="form-group"><label style="font-size:12px">規模</label><select id="tgtScale2" onchange="TARGET_COMPANY.scale=this.value" style="padding:7px;font-size:13px"><option value="">選択</option>';
     for(var si=0;si<SCALE_OPTS.length;si++){h+='<option value="'+SCALE_OPTS[si]+'"'+(TARGET_COMPANY.scale===SCALE_OPTS[si]?' selected':'')+'>'+SCALE_OPTS[si]+'</option>';}
     h+='</select></div>';
+    h+='</div>';
     h+='<div class="form-group"><label style="font-size:12px">希望職種</label><select id="tgtJob2" onchange="TARGET_COMPANY.job=this.value" style="padding:7px;font-size:13px"><option value="">選択</option>';
     for(var ji=0;ji<JT.length;ji++){h+='<option value="'+JT[ji]+'"'+(TARGET_COMPANY.job===JT[ji]?' selected':'')+'>'+JT[ji]+'</option>';}
     h+='</select></div>';
-    h+='</div>';
+    h+='<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">応募先企業名 <span style="font-size:11px;color:#888">※企業ごとに都度作成する場合</span></label><input id="tgtCompanyName2" value="'+esc(TARGET_COMPANY.name||'')+'" placeholder="例: 大成建設、竹中工務店など" oninput="TARGET_COMPANY.name=this.value" style="padding:7px;font-size:13px"></div>';
     h+='<button type="button" class="btn" onclick="generateMotivationPR()" style="width:100%;padding:8px;font-size:13px;background:#2BA84A;margin-top:2px">✨ 自己PRを自動生成</button>';
     h+='</div>';
     h+='<div style="margin-bottom:6px">';
@@ -2270,8 +2491,8 @@ function drawCS(){
     }
     h+='</div>';
     h+='<textarea id="csPR" rows="8" oninput="saveCS()" placeholder="あなたの強みや実績、貢献できることを記入">'+esc(CD.pr||'')+'</textarea></div>';
-  }else if(CS===5){
-    h='<h3>STEP 5: 確認・出力</h3>';
+  }else if(CS===4){
+    h='<h3>STEP 4: 確認・出力</h3>';
     h+='<div style="text-align:center;padding:20px 0">';
     h+='<p style="font-size:16px;margin-bottom:16px">職務経歴書が完成しました！</p>';
     h+='<div style="background:#f0faf1;border:1px solid #c8e6c9;border-radius:6px;padding:10px;margin-bottom:12px;text-align:left">';
@@ -2302,11 +2523,75 @@ function removeProject(idx,pi){saveCS();if(CD.works[idx]&&CD.works[idx].projects
 function autoFillBizSummary(idx){saveCS();var w=CD.works[idx];if(!w)return;var role=w.bizRole||defaultRoleFromCat(w.jobCat||'other');var s=generateBizSummary(w.companyScale,w.companyIndustry,role);w.bizSummary=s;drawCS();}
 function onJobCatChange(idx,newCat){saveCS();if(!CD.works[idx])return;CD.works[idx].jobCat=newCat;/* デフォルト役職も更新 */if(!CD.works[idx].bizRole)CD.works[idx].bizRole=defaultRoleFromCat(newCat);drawCS();}
 function setOutputOrder(o){CD.outputOrder=o;updateCA4();}
-function dbgExport(){var el=document.getElementById('dbgJson');if(!el)return;try{var cdCopy=JSON.parse(JSON.stringify(CD));if(cdCopy.works){for(var i=0;i<cdCopy.works.length;i++){delete cdCopy.works[i].triggerId;}}el.value=JSON.stringify({RD:RD,CD:cdCopy},null,2);}catch(e){alert('エクスポート失敗: '+e.message);}}
-function dbgImport(){var el=document.getElementById('dbgJson');if(!el)return;var raw=el.value.trim();if(!raw){alert('JSONが空です');return;}try{var o=JSON.parse(raw);if(o.RD)RD=o.RD;if(o.CD){CD=o.CD;if(!CD.outputOrder)CD.outputOrder='asc';if(!CD.works)CD.works=[];/* 欠落フィールドを補完 */for(var i=0;i<CD.works.length;i++){var blank=makeEmptyWork();for(var k in blank){if(CD.works[i][k]===undefined)CD.works[i][k]=blank[k];if(k==='triggerId')CD.works[i][k]='';}}/* strength フィールドは削除（自動生成に移行） */for(var i=0;i<CD.works.length;i++){if('strength' in CD.works[i])delete CD.works[i].strength;}/* trigger が JSON に含まれていたら localStorage に移動 */if(o.CD&&o.CD.works){for(var i=1;i<o.CD.works.length;i++){if(o.CD.works[i].triggerId){var priv=JSON.parse(localStorage.getItem('kenten_private_v1')||'{}');priv[i]={triggerId:o.CD.works[i].triggerId};localStorage.setItem('kenten_private_v1',JSON.stringify(priv));}}}/* 古い順に並び替え */CD.works.sort(function(a,b){var af=a.from||'9999-12',bf=b.from||'9999-12';return af.localeCompare(bf);})}alert('投入完了 - 再描画します');if(typeof drawRS==='function')drawRS();drawCS();if(typeof updateA4==='function')updateA4();updateCA4();}catch(e){alert('JSON解析エラー: '+e.message);}}
-function dbgLoadSample(){var sample={RD:{sei:'建設',mei:'太郎',kanaSei:'けんせつ',kanaMei:'たろう',birth:'1985-04-15',gender:'男性',zip:'100-0001',addrKana:'とうきょうとちよだくちよだ',address:'東京都千代田区千代田1-1',phone:'090-1234-5678',email:'sample@example.com',education:[{school:'東京工業大学 工学部 建築学科',dept:'',date:'2008-03',type:'卒業'}],work:[{company:'株式会社A建設',from:'2008-04',to:'2015-03',reason:'一身上の都合により退職'},{company:'株式会社B設計事務所',from:'2015-04',to:'2020-03',reason:'一身上の都合により退職'},{company:'株式会社C工務店',from:'2020-04',to:'',reason:''}],certs:['一級建築士','1級建築施工管理技士']},CD:{works:[{company:'株式会社A建設',from:'2008-04',to:'2015-03',employment:'正社員',jobCat:'sekou',jobTitle:'建築施工管理',industry:'建設業',business:'ゼネコン',capital:'',employees:'',department:'建築工事部',roleName:'担当者',companyScale:'大手',companyIndustry:'ゼネコン',bizRole:'施工管理',bizSummary:'',jobContentChecks:['工程管理','品質管理','安全管理','原価管理'],jobContentFree:'',scaleStructChecks:['RC造','マンション・集合住宅','1〜5億円'],scaleStructFree:'',projects:[{year:'2012',name:'◯◯マンション新築工事',tou:'1棟',cost:'45000',area:'8000',struct:'RC造',structFree:'',floors:'地上15階'}],qa:{}},{company:'株式会社B設計事務所',from:'2015-04',to:'2020-03',employment:'正社員',jobCat:'sekkei',jobTitle:'意匠設計',industry:'建設業',business:'設計事務所',capital:'',employees:'',department:'意匠設計部',roleName:'主任',companyScale:'中堅',companyIndustry:'設計事務所',bizRole:'意匠設計',bizSummary:'',jobContentChecks:['基本設計','実施設計','確認申請','現場監理'],jobContentFree:'',scaleStructChecks:['木造','戸建住宅'],scaleStructFree:'',projects:[{year:'2018',name:'△△邸新築',tou:'1棟',cost:'4500',area:'180',struct:'木造',structFree:'',floors:'地上2階'}],qa:{}},{company:'株式会社C工務店',from:'2020-04',to:'',employment:'正社員',jobCat:'sekou',jobTitle:'現場監督',industry:'建設業',business:'工務店',capital:'',employees:'',department:'工事部',roleName:'所長',companyScale:'地場',companyIndustry:'工務店',bizRole:'施工管理',bizSummary:'',jobContentChecks:['工程管理','品質管理','安全管理','協力会社折衝'],jobContentFree:'',scaleStructChecks:['木造','戸建住宅','注文住宅'],scaleStructFree:'',projects:[{year:'2023',name:'◇◇邸新築工事',tou:'1棟',cost:'5800',area:'160',struct:'木造',structFree:'',floors:'地上2階'}],qa:{}}],summary:'',summaryAuto:true,skillsExp:'',pcSkills:'',certs:['一級建築士','1級建築施工管理技士'],pr:'',outputOrder:'asc'}};var el=document.getElementById('dbgJson');if(el)el.value=JSON.stringify(sample,null,2);dbgImport();}
 function useCTpl(field,text){var el=document.getElementById('cs'+field.charAt(0).toUpperCase()+field.slice(1));if(el){el.value=text;saveCS();}}
-function appendCTpl(field,cat,idx){var arr=SKILL_TPL[cat]||SKILL_TPL.other;var t=arr[idx];if(!t)return;var el=document.getElementById('cs'+field.charAt(0).toUpperCase()+field.slice(1));if(!el)return;var cur=el.value||'';if(cur.trim()){if(cur.charAt(cur.length-1)!=='\n')cur+='\n';cur+='\n'+t.body;}else{cur=t.body;}el.value=cur;saveCS();}
+function appendCTpl(field,cat,idx){var arr=SKILL_TPL[cat]||SKILL_TPL.other;var tpls=[];for(var _i=0;_i<arr.length;_i++){if(arr[_i]&&arr[_i].name)tpls.push(arr[_i]);}var t=tpls[idx];if(!t)return;var el=document.getElementById('cs'+field.charAt(0).toUpperCase()+field.slice(1));if(!el)return;var cur=el.value||'';if(cur.trim()){if(cur.charAt(cur.length-1)!=='\n')cur+='\n';cur+='\n'+t.body;}else{cur=t.body;}el.value=cur;saveCS();}
+/* 入力済みデータから「活かせる経験・スキル」を自動生成 */
+function generateSkillsExp(){
+  var _catLabel={sekou:'施工管理',sekkei:'設計',cad:'CAD・BIM',eigyo:'営業',jimu:'事務',other:'実務'};
+  /* 職種別の年数を集計 */
+  var catYrs={};
+  for(var i=0;i<CD.works.length;i++){
+    var w=CD.works[i];var cat=w.jobCat||'other';
+    if(!w.from)continue;
+    var _td=w.to?new Date(w.to+'-01'):new Date();
+    var _fd=new Date(w.from+'-01');
+    var yrs=Math.round((_td-_fd)/(1000*60*60*24*365.25));
+    catYrs[cat]=(catYrs[cat]||0)+yrs;
+  }
+  /* 経験文: 「施工管理20年・設計7年の経験を有し」 */
+  var expParts=[];
+  for(var c in catYrs){if(catYrs[c]>0)expParts.push((_catLabel[c]||c)+catYrs[c]+'年');}
+  /* 構造を集約 */
+  var structs=[];
+  var structKW=['木造','RC造','S造','SRC造','PC造','CLT'];
+  for(var i=0;i<CD.works.length;i++){
+    var ss=CD.works[i].scaleStructChecks||[];
+    for(var j=0;j<ss.length;j++){
+      if(typeof ss[j]!=='string')continue;
+      for(var sk=0;sk<structKW.length;sk++){if(ss[j].indexOf(structKW[sk])!==-1&&structs.indexOf(structKW[sk])===-1)structs.push(structKW[sk]);}
+    }
+  }
+  /* 用途を集約 */
+  var uses=[];
+  var useKW=['マンション','戸建','住宅','事務所','店舗','工場','倉庫','物流','病院','ホテル','学校','商業施設','保育園'];
+  for(var i=0;i<CD.works.length;i++){
+    var ss=CD.works[i].scaleStructChecks||[];
+    for(var j=0;j<ss.length;j++){
+      if(typeof ss[j]!=='string')continue;
+      for(var uk=0;uk<useKW.length;uk++){if(ss[j].indexOf(useKW[uk])!==-1&&uses.indexOf(useKW[uk])===-1)uses.push(useKW[uk]);}
+    }
+  }
+  /* 最大延床面積を取得 */
+  var maxArea=0;
+  for(var i=0;i<CD.works.length;i++){
+    var projs=CD.works[i].projects||[];
+    for(var p=0;p<projs.length;p++){var a=parseInt(projs[p].area,10)||0;if(a>maxArea)maxArea=a;}
+  }
+  /* 資格 */
+  var cNames=getCertNamesForMotivation();
+  /* ---- 2〜3行の要約文を組み立て ---- */
+  var lines=[];
+  /* 1行目: 経験年数＋対応構造 */
+  var line1='';
+  if(expParts.length>0)line1+=expParts.join('・')+'の経験を有し、';
+  if(structs.length>0)line1+=structs.join('・')+'まで幅広い構造に対応可能。';
+  else if(expParts.length>0)line1=line1.replace(/、$/,'。');
+  if(line1)lines.push(line1);
+  /* 2行目: 用途＋最大規模 */
+  var line2='';
+  if(uses.length>0)line2+=uses.join('・')+'等の';
+  if(maxArea>0)line2+='延床'+Number(maxArea).toLocaleString()+'㎡規模までの案件実績あり。';
+  else if(uses.length>0)line2+='案件実績あり。';
+  if(line2)lines.push(line2);
+  /* 3行目: 資格 */
+  if(cNames.length>0)lines.push(cNames.join('・')+'を保有。');
+  if(lines.length===0){
+    alert('STEP 2・3で職務内容や実績を入力すると、自動生成できます。');
+    return;
+  }
+  var el=document.getElementById('csSkillsExp');
+  if(el){el.value=lines.join('\n');CD.skillsExp=el.value;saveCS();}
+}
 function useCPRTpl(idx,cat){var t=(PR_TPL[cat]||PR_TPL.other)[idx];var el=document.getElementById('csPR');if(el){el.value=t;saveCS();}}
 function regenSummary(){CD.summaryAuto=true;CD.summary='';var s=autoSummary();var el=document.getElementById('csSummary');if(el){el.value=s;CD.summary=s;updateCA4();}}
 
@@ -2345,10 +2630,9 @@ function buildWorkBlockChunks(w,isLast){
   chunks.push({html:headHtml,h:28,type:'header'});
   /* ① 所属/役職 */
   if(w.department||w.roleName){
-    var p1=[];
-    if(w.department)p1.push('所属: '+esc(w.department));
-    if(w.roleName)p1.push('役職: '+esc(w.roleName));
-    chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;line-height:1.4"><strong>所属／役職:</strong> '+p1.join(' ／ ')+'</div>',h:17,type:'detail'});
+    var p1='所属: <strong>'+esc(w.department||'')+'</strong>';
+    if(w.roleName)p1+='　役職: <strong>'+esc(w.roleName)+'</strong>';
+    chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;line-height:1.4">'+p1+'</div>',h:17,type:'detail'});
   }
   /* ② 業務概要 */
   if(w.bizSummary){
@@ -2436,10 +2720,9 @@ function buildWorkBlockHTML(w,isLast){
   h+='<div style="font-size:16px;font-weight:bold;margin:3px 0 4px">'+esc(w.company||'')+'</div>';
   /* ① 所属/役職 */
   if(w.department||w.roleName){
-    var p1=[];
-    if(w.department)p1.push('所属: '+esc(w.department));
-    if(w.roleName)p1.push('役職: '+esc(w.roleName));
-    h+='<div style="font-size:13px;margin-top:3px;line-height:1.6"><strong>所属／役職:</strong> '+p1.join(' ／ ')+'</div>';
+    var p1='所属: <strong>'+esc(w.department||'')+'</strong>';
+    if(w.roleName)p1+='　役職: <strong>'+esc(w.roleName)+'</strong>';
+    h+='<div style="font-size:13px;margin-top:3px;line-height:1.6">'+p1+'</div>';
   }
   /* ② 業務概要（ラベルと本文を同一行に） */
   if(w.bizSummary){
@@ -2558,11 +2841,10 @@ function updateCA4(){
     var bodyH=chWrapHeight(body,11.5,1.45,48);
     stream.push({type:'section-body',html:bodyHtml,h:bodyH});
   }
-  if(CD.skillsExp)pushSection('■ 活かせる経験・知識・スキル',CD.skillsExp,true);
-  if(CD.pcSkills)pushSection('■ PCスキル',CD.pcSkills,false);
   var certText='';
   if(CD.certs&&CD.certs.length)certText=CD.certs.join('、');
   if(certText)pushSection('■ 保有資格',certText,false);
+  if(CD.pcSkills)pushSection('■ PCスキル',CD.pcSkills,false);
   if(CD.pr)pushSection('■ 自己PR',CD.pr,false);
 
   /* === ページ組版（pxベース） === */
