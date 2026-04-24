@@ -1088,6 +1088,9 @@ function workTimelineCheck(){
         if(diffM>=3){
           alerts.push({type:'gap',idxAfter:valid[i+1].idx,msg:'ℹ '+valid[i].company+'退社後、'+valid[i+1].company+'入社まで約'+diffM+'ヶ月の空白期間があります。補足があれば記入してください。'});
         }
+      }else if(!curEnd&&nextStart){
+        /* 退社年月が未入力 → 空白期間を判定できないので警告 */
+        alerts.push({type:'gap',idxAfter:valid[i+1].idx,msg:'ℹ '+valid[i].company+'の退社年月が未入力のため、空白期間を確認できません。退社年月を入力してください。'});
       }
     }
   }
@@ -1372,34 +1375,60 @@ function openCheck(mode){
   // spacer: 14px
   p1+='<div style="height:8px"></div>';
 
-  // ===== 学歴・職歴 table: header 24px + 14 data rows × 28px (印刷安全地帯確保のため1行削減) =====
-  var totalHistRows=14;var rowsUsed=0;
-  p1+='<table style="width:100%;border-collapse:collapse;'+B+';font-size:12px;table-layout:fixed">';
-  p1+='<colgroup><col style="width:52px"><col style="width:29px"><col></colgroup>';
-  p1+='<tr style="height:24px"><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">年</th><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">月</th><th style="'+BB+';padding:2px;text-align:center;font-weight:normal;font-size:12px">学歴・職歴（各別にまとめて書く）</th></tr>';
+  // ===== 学歴・職歴 table: 全行を配列に集めてからP1/P2に分配 =====
+  var totalHistRowsP1=14;
+  var totalHistRowsP2=7;
+  var allHistRows=[];
+  function mkHistRow(y,m,text,opts){
+    opts=opts||{};
+    return '<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+(y||'')+'</td><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+(m||'')+'</td><td style="'+BB+';padding:1px 4px;font-size:12px'+(opts.center?';text-align:center;font-weight:bold':'')+(opts.right?';text-align:right':'')+'">'+text+'</td></tr>';
+  }
+  function mkEmptyRow(){return '<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';padding:1px"></td></tr>';}
 
   if(RD.education&&RD.education.some(function(e){return e.school;})){
-    p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';text-align:center;font-weight:bold;padding:1px;font-size:12px">学歴</td></tr>';rowsUsed++;
+    allHistRows.push(mkHistRow('','','学歴',{center:true}));
     for(var i=0;i<RD.education.length;i++){var e=RD.education[i];if(e.school){
       var ed=e.date?new Date(e.date+'-01T00:00:00'):null;var y=(ed&&!isNaN(ed))?ed.getFullYear():'';var mo=(ed&&!isNaN(ed))?(ed.getMonth()+1):'';
-      p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+y+'</td><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+mo+'</td><td style="'+BB+';padding:1px 4px;font-size:12px">'+esc(e.school)+' '+esc(e.dept||'')+' '+esc(e.type||'')+'</td></tr>';rowsUsed++;
+      allHistRows.push(mkHistRow(y,mo,esc(e.school)+' '+esc(e.dept||'')+' '+esc(e.type||'')));
     }}
   }
   if(RD.work&&RD.work.some(function(w){return w.company;})){
-    p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';text-align:center;font-weight:bold;padding:1px;font-size:12px">職歴</td></tr>';rowsUsed++;
+    /* 職歴が7社以上なら1行まとめモード */
+    var workCount=0;
+    for(var _wc=0;_wc<RD.work.length;_wc++){if(RD.work[_wc].company)workCount++;}
+    var compactWork=(workCount>=7);
+    allHistRows.push(mkHistRow('','','職歴',{center:true}));
     for(var i=0;i<RD.work.length;i++){var w=RD.work[i];if(w.company){
       var fd=w.from?new Date(w.from+'-01T00:00:00'):null;var fy=(fd&&!isNaN(fd))?fd.getFullYear():'';var fm=(fd&&!isNaN(fd))?(fd.getMonth()+1):'';
-      p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+fy+'</td><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+fm+'</td><td style="'+BB+';padding:1px 4px;font-size:12px">'+esc(w.company)+' 入社</td></tr>';rowsUsed++;
-      if(w.to){var td2=new Date(w.to+'-01T00:00:00');var ty=td2.getFullYear();var tm=td2.getMonth()+1;
-      var reason=w.reason||'一身上の都合により退職';
-      p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+ty+'</td><td style="'+BB+';'+BR+';padding:1px;text-align:center;font-size:12px">'+tm+'</td><td style="'+BB+';padding:1px 4px;font-size:12px">'+reason+'</td></tr>';rowsUsed++;}
-      else{p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';padding:1px 4px;font-size:12px">現在に至る</td></tr>';rowsUsed++;}
+      /* 空白期間の補足がある場合、入社行の前に表示（gapNoteは次の会社側に保存される） */
+      if(w.gapNote){
+        allHistRows.push(mkHistRow('','','（'+esc(w.gapNote)+'）'));
+      }
+      if(compactWork){
+        /* 1行まとめ: ○○株式会社 入社（2022年3月 一身上の都合により退職） */
+        var companyText=esc(w.company)+' 入社';
+        if(w.to){var td2=new Date(w.to+'-01T00:00:00');var ty=td2.getFullYear();var tm=td2.getMonth()+1;
+        var reason=w.reason||'一身上の都合により退職';
+        companyText+='（'+ty+'年'+tm+'月 '+reason+'）';}
+        else{companyText+='（現在に至る）';}
+        allHistRows.push(mkHistRow(fy,fm,companyText));
+      }else{
+        allHistRows.push(mkHistRow(fy,fm,esc(w.company)+' 入社'));
+        if(w.to){var td2=new Date(w.to+'-01T00:00:00');var ty=td2.getFullYear();var tm=td2.getMonth()+1;
+        var reason=w.reason||'一身上の都合により退職';
+        allHistRows.push(mkHistRow(ty,tm,reason));}
+        else{allHistRows.push(mkHistRow('','','現在に至る'));}
+      }
     }}
   }
-  p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';padding:1px 4px;text-align:right;font-size:12px">以上</td></tr>';rowsUsed++;
-  while(rowsUsed<totalHistRows){
-    p1+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';padding:1px"></td></tr>';rowsUsed++;
-  }
+  allHistRows.push(mkHistRow('','','以上',{right:true}));
+
+  // P1に最大14行を配置
+  var histTableHdr='<table style="width:100%;border-collapse:collapse;'+B+';font-size:12px;table-layout:fixed"><colgroup><col style="width:52px"><col style="width:29px"><col></colgroup><tr style="height:24px"><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">年</th><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">月</th><th style="'+BB+';padding:2px;text-align:center;font-weight:normal;font-size:12px">学歴・職歴（各別にまとめて書く）</th></tr>';
+  p1+=histTableHdr;
+  var p1HistCount=Math.min(allHistRows.length,totalHistRowsP1);
+  for(var hi=0;hi<p1HistCount;hi++)p1+=allHistRows[hi];
+  for(var hi=p1HistCount;hi<totalHistRowsP1;hi++)p1+=mkEmptyRow();
   p1+='</table>';
   p1+='<div style="font-size:6px;margin-top:3px">※「性別」欄：記載は任意です。未記載とすることも可能です。</div>';
   p1+='</div>';
@@ -1408,11 +1437,13 @@ function openCheck(mode){
   // === PAGE 2 === (794px usable)
   var p2='<div class="a4-sheet">';
 
-  // 学歴・職歴 continued: header 24px + 7 rows × 28px = 220px
-  p2+='<table style="width:100%;border-collapse:collapse;'+B+';font-size:12px;table-layout:fixed">';
-  p2+='<colgroup><col style="width:52px"><col style="width:29px"><col></colgroup>';
-  p2+='<tr style="height:24px"><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">年</th><th style="'+BB+';'+BR+';padding:2px;text-align:center;font-weight:normal;font-size:12px">月</th><th style="'+BB+';padding:2px;text-align:center;font-weight:normal;font-size:12px">学歴・職歴（各別にまとめて書く）</th></tr>';
-  for(var i=0;i<7;i++){p2+='<tr style="height:'+rH+'px"><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';'+BR+';padding:1px"></td><td style="'+BB+';padding:1px"></td></tr>';}
+  // 学歴・職歴 continued: header 24px + 7 rows × 28px = 220px（P1からの溢れを配置）
+  p2+=histTableHdr;
+  var p2HistStart=totalHistRowsP1;
+  var p2HistCount=Math.min(allHistRows.length-p2HistStart,totalHistRowsP2);
+  if(p2HistCount<0)p2HistCount=0;
+  for(var hi=p2HistStart;hi<p2HistStart+p2HistCount;hi++)p2+=allHistRows[hi];
+  for(var hi=p2HistCount;hi<totalHistRowsP2;hi++)p2+=mkEmptyRow();
   p2+='</table>';
 
   // 免許・資格: header 24px + 6 rows × 28px = 192px (NO gap between tables)
