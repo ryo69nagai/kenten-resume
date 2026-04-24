@@ -1949,6 +1949,15 @@ function saveCS(){
     x=document.getElementById('csPcSkills');if(x)CD.pcSkills=x.value;
     var addCerts=document.getElementById('csCertOther');
     if(addCerts&&addCerts.value){var extras=addCerts.value.split(/[,、]/).map(function(s){return s.trim();}).filter(Boolean);for(var ei=0;ei<extras.length;ei++){if(CD.certs.indexOf(extras[ei])===-1)CD.certs.push(extras[ei]);}}
+    /* 受賞・表彰 */
+    var awRows=document.querySelectorAll('.cs-award-row');
+    var awArr=[];
+    for(var ai=0;ai<awRows.length;ai++){
+      var ay=awRows[ai].querySelector('.cs-award-year');
+      var an=awRows[ai].querySelector('.cs-award-name');
+      if(ay&&an&&(ay.value||an.value))awArr.push({year:ay.value,name:an.value});
+    }
+    CD.awards=awArr.length?awArr:[];
   }else if(CS===3){
     x=document.getElementById('csSummary');if(x){CD.summary=x.value;CD.summaryAuto=false;}
     x=document.getElementById('csPR');if(x)CD.pr=x.value;
@@ -2471,6 +2480,19 @@ function drawCS(){
       h+='</div>';
     }
     h+='<input id="csCertOther" value="" oninput="saveCS()" placeholder="追加資格があれば入力（カンマ区切り可）"></div>';
+    /* 受賞・表彰 */
+    h+='<div class="form-group"><label>受賞・表彰（任意）</label>';
+    h+='<div style="font-size:11px;color:#666;margin-bottom:6px">入力した場合のみ職務経歴書に表示されます。</div>';
+    var awards=CD.awards||[{}];
+    for(var ai=0;ai<awards.length;ai++){
+      h+='<div class="cs-award-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">';
+      h+='<input class="cs-award-year" value="'+esc(awards[ai].year||'')+'" placeholder="年（例: 2020）" style="width:80px" oninput="saveCS()">';
+      h+='<input class="cs-award-name" value="'+esc(awards[ai].name||'')+'" placeholder="受賞名（例: グッドデザイン賞）" style="flex:1" oninput="saveCS()">';
+      if(awards.length>1)h+='<span style="color:#c33;cursor:pointer;font-size:12px" onclick="removeAward('+ai+')">✕</span>';
+      h+='</div>';
+    }
+    h+='<button type="button" class="add-btn" onclick="addAward()" style="margin-top:4px;font-size:11px">＋ 追加</button>';
+    h+='</div>';
     h+='<div class="form-group"><label>PCスキル・使用ソフト</label>';
     h+='<div style="margin-bottom:6px"><span class="template-btn" onclick="useCTpl(\'pcSkills\','+JSON.stringify(PCSKILL_TPL[mainCat]).replace(/"/g,'&quot;')+')">📋 テンプレを挿入</span></div>';
     h+='<textarea id="csPcSkills" rows="3" oninput="saveCS()" placeholder="例: AutoCAD（実務5年）、Excel、Word">'+esc(CD.pcSkills||'')+'</textarea></div>';
@@ -2533,6 +2555,8 @@ function drawCS(){
   updateCA4();
 }
 
+function addAward(){saveCS();if(!CD.awards)CD.awards=[];CD.awards.push({});drawCS();}
+function removeAward(idx){saveCS();if(CD.awards&&CD.awards.length>1)CD.awards.splice(idx,1);drawCS();}
 function addCWork(){saveCS();CD.works.push(makeEmptyWork());refreshAllForwardReasons();drawCS();}
 function removeCWork(i){if(!confirm('この職歴を削除しますか？'))return;saveCS();CD.works.splice(i,1);if(CD.works.length===0)CD.works.push(makeEmptyWork());refreshAllForwardReasons();drawCS();}
 function addProject(idx){saveCS();if(!CD.works[idx].projects)CD.works[idx].projects=[];CD.works[idx].projects.push({});drawCS();}
@@ -2857,6 +2881,10 @@ function updateCA4(){
   var certText='';
   if(CD.certs&&CD.certs.length)certText=CD.certs.join('、');
   if(certText)pushSection('■ 保有資格',certText,false);
+  /* 受賞・表彰（入力がある場合のみ） */
+  var awardLines=[];
+  if(CD.awards){for(var _ai=0;_ai<CD.awards.length;_ai++){var _aw=CD.awards[_ai];if(_aw.name){awardLines.push((_aw.year?_aw.year+'年　':'')+_aw.name);}}}
+  if(awardLines.length)pushSection('■ 受賞・表彰',awardLines.join('\n'),false);
   if(CD.pcSkills)pushSection('■ PCスキル',CD.pcSkills,false);
   if(CD.pr)pushSection('■ 自己PR',CD.pr,false);
 
