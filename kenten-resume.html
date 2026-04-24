@@ -41,8 +41,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
 /* DASHBOARD */
 .pg-dash{padding:40px 20px}
 .dash-header{text-align:center;margin-bottom:50px}
-.dash-title{font-size:28px;font-weight:bold;color:#2BA84A;margin-bottom:8px}
-.dash-sub{font-size:15px;color:#666}
+.dash-logo{margin-bottom:12px}.dash-logo img{max-width:260px;width:100%;height:auto;display:block;margin:0 auto}
+.dash-title{font-size:22px;font-weight:bold;color:#333;margin-bottom:8px}
 .dash-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:16px;max-width:800px;margin:0 auto;padding:0 8px}
 .dash-card{background:#fff;border-radius:12px;padding:36px;box-shadow:0 4px 16px rgba(0,0,0,.08);text-align:center;cursor:pointer;transition:transform .2s,box-shadow .2s}
 .dash-card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
@@ -60,8 +60,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
 .wiz-top{display:flex;align-items:center;margin-bottom:16px}
 .wiz-back{background:none;border:none;font-size:22px;cursor:pointer;padding:6px;color:#666}
 .wiz-title{flex:1;text-align:center;font-size:17px;font-weight:bold;color:#2BA84A}
-.wiz-home{background:#ccc;border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
-.wiz-home svg{width:20px;height:20px;fill:#fff}
+.wiz-home{background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+.wiz-home img{height:28px;width:auto;display:block}
 .step-indicator{text-align:center;font-size:12px;color:#999;margin-bottom:8px}
 .progress-bar{height:5px;background:#e0e0e0;border-radius:3px;margin-bottom:24px;overflow:hidden}
 .progress-fill{height:100%;background:#2BA84A;border-radius:3px;transition:width .3s}
@@ -223,14 +223,14 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
 <!-- DASHBOARD -->
 <div class="page pg-dash" id="pageDash">
   <div class="dash-header">
-    <div class="dash-title" id="dashTitle">ダッシュボード</div>
-    <div class="dash-sub">作成したい書類を選んでください</div>
+    <div class="dash-logo" id="dashLogo"></div>
+    <div class="dash-title" id="dashTitle">マイページ</div>
   </div>
   <div class="dash-cards">
     <div class="dash-card" onclick="startResume()">
       <div class="icon">📝</div>
       <h3>書類を作成</h3>
-      <p>履歴書（9ステップ）→ 職務経歴書（6ステップ）を一気通貫で作成。建設業2,500件のデータを学習したAIが質問を自動生成。</p>
+      <p>履歴書→ 職務経歴書を、カンタンな操作で<br>一気に作成。建設業の応募書類を<br>大量に学習したAIが、あなたをサポートします！</p>
       <button type="button" class="btn">作成開始</button>
     </div>
     <div class="dash-card" onclick="startResume();RS=3;drawRS();">
@@ -258,7 +258,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
       <div class="wiz-top">
         <button type="button" class="wiz-back" onclick="backFromResume()">←</button>
         <div class="wiz-title">履歴書作成</div>
-        <button type="button" class="wiz-home" onclick="goToDash()" title="ダッシュボードへ戻る"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
+        <button type="button" class="wiz-home" onclick="goToDash()" title="マイページへ戻る"><img class="wiz-home-logo" src="" alt="建築パス"></button>
       </div>
       <div class="step-indicator" id="resumeStepLabel">Step 1 / 10</div>
       <div class="progress-bar"><div class="progress-fill" id="resumeProgress" style="width:10%"></div></div>
@@ -288,7 +288,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
       <div class="wiz-top">
         <button type="button" class="wiz-back" onclick="backFromCareer()">←</button>
         <div class="wiz-title">職務経歴書作成</div>
-        <button type="button" class="wiz-home" onclick="goToDash()" title="ダッシュボードへ戻る"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
+        <button type="button" class="wiz-home" onclick="goToDash()" title="マイページへ戻る"><img class="wiz-home-logo" src="" alt="建築パス"></button>
       </div>
       <div class="step-indicator" id="careerStepLabel">Step 1 / 4</div>
       <div class="progress-bar"><div class="progress-fill" id="careerProgress" style="width:16%"></div></div>
@@ -1123,7 +1123,7 @@ var rdStr=localStorage.getItem('kp_rd_'+e);
 if(rdStr){try{RD=JSON.parse(rdStr);if(!RD.education||!RD.education.length)RD.education=[{}];if(!RD.work||!RD.work.length)RD.work=[{}];}catch(ex){RD={education:[{}],work:[{}],skills:'',summary:''};}}
 else{RD={education:[{}],work:[{}],skills:'',summary:''};}
 photoDataURL=localStorage.getItem('kp_photo_'+e)||'';
-document.getElementById('dashTitle').textContent=CU.name+'さんのダッシュボード';goTo('pageDash');}
+document.getElementById('dashTitle').textContent=CU.name+'さんのマイページ';var _li=document.querySelector('.login-logo img');if(_li){var _dl=document.getElementById('dashLogo');if(_dl)_dl.innerHTML='<img src="'+_li.src+'" alt="建築パス">';var _whl=document.querySelectorAll('.wiz-home-logo');for(var _wh=0;_wh<_whl.length;_wh++)_whl[_wh].src=_li.src;}goTo('pageDash');}
 function doLogout(){CU=null;try{localStorage.removeItem('kp_session');localStorage.removeItem('kp_page');}catch(ex){}RD={education:[{}],work:[{}],skills:'',summary:''};photoDataURL='';goTo('pageLogin');}
 function goToDash(){persistRD();persistCD();goTo('pageDash');}
 /* v8マイグレーション済み — 処理削除（再実行によるデータ消失を防止） */
@@ -3507,7 +3507,7 @@ CU=cu;
 var rdStr=localStorage.getItem('kp_rd_'+CU.email);
 if(rdStr){try{RD=JSON.parse(rdStr);if(!RD.education||!RD.education.length)RD.education=[{}];if(!RD.work||!RD.work.length)RD.work=[{}];}catch(e){RD={education:[{}],work:[{}],skills:'',summary:''};}}
 photoDataURL=localStorage.getItem('kp_photo_'+CU.email)||'';
-document.getElementById('dashTitle').textContent=CU.name+'さんのダッシュボード';
+document.getElementById('dashTitle').textContent=CU.name+'さんのマイページ';var _li=document.querySelector('.login-logo img');if(_li){var _dl=document.getElementById('dashLogo');if(_dl)_dl.innerHTML='<img src="'+_li.src+'" alt="建築パス">';var _whl=document.querySelectorAll('.wiz-home-logo');for(var _wh=0;_wh<_whl.length;_wh++)_whl[_wh].src=_li.src;}
 /* ページ復元 */
 var pg=localStorage.getItem('kp_page')||'pageDash';
 var rs=localStorage.getItem('kp_rs');if(rs)RS=parseInt(rs,10)||1;
