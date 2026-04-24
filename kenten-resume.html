@@ -2030,7 +2030,7 @@ function autoSummary(){
       }
       if(sorted[k].roleName)gRole=sorted[k].roleName;
       var il=sorted[k].companyIndustry||'';
-      if(il&&gIndLabels.indexOf(il)===-1)gIndLabels.push(il);
+      if(il&&il!=='その他'&&gIndLabels.indexOf(il)===-1)gIndLabels.push(il);
     }
     var gYrs=Math.round(gMonths/12);
     var wCat=catName[gCat]||'業務';
