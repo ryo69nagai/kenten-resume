@@ -1512,16 +1512,23 @@ function genResumePDF(){
   if(!container||!container.innerHTML){alert('プレビューデータがありません');return;}
   var sheets=container.querySelectorAll('.a4-sheet');
   if(sheets.length===0){alert('ページが見つかりません');return;}
+  /* スマホ判定: 画面幅900px以下ならscale:1.5で軽量化 */
+  var isMobile=window.innerWidth<=900;
+  var pdfScale=isMobile?1.5:2;
+  /* PDF出力中はvideo要素を一時非表示（html2canvasのtaintedエラー回避） */
+  var vid=document.getElementById('cameraVideo');
+  var vidDisp='';if(vid){vidDisp=vid.style.display;vid.style.display='none';}
   var saved=suspendScale(container);
   var pdf=new jspdf.jsPDF('p','mm','a4');var processedPages=0;
   function addPageToPDF(){
     if(processedPages<sheets.length){
-      html2canvas(sheets[processedPages],{scale:2,useCORS:true,backgroundColor:'#fff'}).then(function(canvas){
+      html2canvas(sheets[processedPages],{scale:pdfScale,useCORS:true,backgroundColor:'#fff',imageTimeout:15000,removeContainer:true}).then(function(canvas){
         var img=canvas.toDataURL('image/png');if(processedPages>0)pdf.addPage();
         pdf.addImage(img,'PNG',0,0,210,297);processedPages++;addPageToPDF();
-      }).catch(function(err){restoreScale(container,saved);alert('PDF出力に失敗しました: '+err.message);});
+      }).catch(function(err){restoreScale(container,saved);if(vid)vid.style.display=vidDisp;alert('PDF出力に失敗しました: '+err.message);});
     }else{
-      restoreScale(container,saved);var _rn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();pdf.save('履歴書_'+(_rn||'未入力')+'.pdf');
+      restoreScale(container,saved);if(vid)vid.style.display=vidDisp;
+      var _rn=((RD.sei||'')+(RD.mei?' '+RD.mei:'')).trim();pdf.save('履歴書_'+(_rn||'未入力')+'.pdf');
     }
   }
   addPageToPDF();
