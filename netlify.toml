@@ -4,3 +4,8 @@
 
 [functions]
   node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/ocr-proxy"
+  to = "/.netlify/functions/ocr-proxy"
+  status = 200

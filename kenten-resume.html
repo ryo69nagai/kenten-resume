@@ -232,6 +232,17 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
     <div class="dash-logo" id="dashLogo"></div>
     <div class="dash-title" id="dashTitle">マイページ</div>
   </div>
+
+    <div id="scoreWrap" style="margin:0 auto 20px;max-width:600px;padding:0 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span id="scoreLabel" style="font-weight:bold;font-size:15px;color:#333">完成度 0%</span>
+        <span style="font-size:11px;color:#999">履歴書＋職務経歴書</span>
+      </div>
+      <div style="background:#e0e0e0;border-radius:10px;height:18px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.12)">
+        <div id="scoreBar" style="width:0%;height:100%;border-radius:10px;background:#e53935;transition:width .6s ease,background .4s ease"></div>
+      </div>
+      <div id="scoreDetail" style="margin-top:6px;font-size:12px;color:#666"></div>
+    </div>
   <div class="dash-cards">
     <div class="dash-card" onclick="startResume()">
       <div class="icon">📝</div>
@@ -251,11 +262,81 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
       <p>セブンイレブン・ファミマ・ローソンで履歴書を印刷する方法をステップバイステップでガイド。</p>
       <button type="button" class="btn">印刷ガイド</button>
     </div>
+    <div class="dash-card" onclick="openOCR()">
+      <div class="icon">✍️</div>
+      <h3>手書きをデータ化</h3>
+      <p>手書きの履歴書・職務経歴書をスマホで撮影。AIが文字を読み取り、自動で入力欄に反映します。</p>
+      <button type="button" class="btn">読み取り開始</button>
+    </div>
   </div>
   <div class="logout-wrap">
     <button type="button" class="btn btn-outline" onclick="doLogout()">ログアウト</button>
   </div>
 </div>
+
+<!-- OCR モーダル -->
+<div id="ocrModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);overflow-y:auto">
+<div style="max-width:640px;margin:32px auto;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eee">
+    <h3 style="margin:0;font-size:17px;color:#333">📷 書類の読み取り</h3>
+    <button type="button" onclick="closeOCR()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666">✕</button>
+  </div>
+  <div style="padding:20px">
+    <!-- Step 1: 種類選択＋画像アップロード -->
+    <div id="ocrStep1">
+      <p style="font-size:14px;color:#555;margin-bottom:12px">読み取る書類を選んで、写真をアップロードしてください</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+        <label id="ocrLabelResume" style="display:flex;align-items:center;gap:6px;padding:12px;border:2px solid #2BA84A;border-radius:8px;cursor:pointer;background:#f0faf2">
+          <input type="radio" name="ocrType" value="resume" checked style="accent-color:#2BA84A" onchange="ocrTypeSelect()">
+          <div><div style="font-weight:bold;font-size:13px">履歴書</div><div style="font-size:10px;color:#999">氏名・学歴・職歴</div></div>
+        </label>
+        <label id="ocrLabelCareer" style="display:flex;align-items:center;gap:6px;padding:12px;border:2px solid #e0e0e0;border-radius:8px;cursor:pointer">
+          <input type="radio" name="ocrType" value="career" style="accent-color:#2BA84A" onchange="ocrTypeSelect()">
+          <div><div style="font-weight:bold;font-size:13px">職務経歴書</div><div style="font-size:10px;color:#999">業務内容・実績</div></div>
+        </label>
+        <label id="ocrLabelCombined" style="display:flex;align-items:center;gap:6px;padding:12px;border:2px solid #e0e0e0;border-radius:8px;cursor:pointer">
+          <input type="radio" name="ocrType" value="combined" style="accent-color:#2BA84A" onchange="ocrTypeSelect()">
+          <div><div style="font-weight:bold;font-size:13px">レジュメ</div><div style="font-size:10px;color:#999">混合型・一体型</div></div>
+        </label>
+      </div>
+      <div id="ocrDropZone" style="border:2px dashed #ccc;border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s;background:#fafafa">
+        <div style="font-size:36px;margin-bottom:8px">📷</div>
+        <div style="font-size:14px;color:#666">写真をドラッグ＆ドロップ<br>または<span style="color:#2BA84A;font-weight:bold">タップして選択</span></div>
+        <div style="font-size:11px;color:#aaa;margin-top:8px">JPG / PNG 対応（複数ページ可）</div>
+        <input type="file" id="ocrFileInput" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple style="display:none">
+      </div>
+      <div id="ocrThumbList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
+      <div id="ocrStartWrap" style="display:none;margin-top:12px;text-align:center">
+        <span id="ocrFileCount" style="font-size:13px;color:#555"></span>
+        <button type="button" class="btn" onclick="ocrStartRead()" style="margin-left:12px;padding:8px 20px">読み取り開始</button>
+      </div>
+      <!-- API設定は非表示（キーはコード内にハードコード済み） -->
+      <div id="ocrErrorMsg" style="display:none;margin-top:12px;padding:10px 14px;background:#fff3f3;border:1px solid #ffcdd2;border-radius:8px;font-size:13px;color:#c62828"></div>
+    </div>
+    <!-- Step 2: 処理中 -->
+    <div id="ocrStep2" style="display:none">
+      <div id="ocrPreviewArea" style="margin-bottom:16px;text-align:center"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:20px;height:20px;border:3px solid #e0e0e0;border-top-color:#2BA84A;border-radius:50%;animation:ocrspin 1s linear infinite"></div>
+        <span id="ocrStatusText" style="font-size:14px;color:#555">文字を読み取っています…</span>
+      </div>
+      <div style="background:#e0e0e0;border-radius:6px;height:8px;overflow:hidden">
+        <div id="ocrProgressBar" style="width:0%;height:100%;background:#2BA84A;border-radius:6px;transition:width .3s"></div>
+      </div>
+    </div>
+    <!-- Step 3: 結果確認 -->
+    <div id="ocrStep3" style="display:none">
+      <p style="font-size:14px;color:#555;margin-bottom:12px">読み取り結果を確認・修正してから反映してください：</p>
+      <div id="ocrResultFields" style="margin-bottom:16px;max-height:55vh;overflow-y:auto"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" class="btn btn-outline" onclick="ocrRetry()" style="padding:10px 20px">やり直す</button>
+        <button type="button" class="btn" onclick="ocrApply()" style="padding:10px 24px">入力に反映する →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<style>@keyframes ocrspin{to{transform:rotate(360deg)}}</style>
 
 <!-- RESUME 2-PANE -->
 <div class="page" id="pageResume">
@@ -395,8 +476,8 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
       <img id="cropImage" class="crop-image" src="" alt="">
     </div>
     <div class="crop-controls">
-      <label>ズーム (50%〜150%): <span id="zoomValue">100%</span></label>
-      <input type="range" id="zoomSlider" min="0.5" max="1.5" step="0.05" value="1" oninput="updateCropPreview()">
+      <label>ズーム (50%〜300%): <span id="zoomValue">100%</span></label>
+      <input type="range" id="zoomSlider" min="0.5" max="3" step="0.05" value="1" oninput="updateCropPreview()">
     </div>
     <div class="crop-buttons">
       <button type="button" class="crop-confirm" onclick="confirmCrop()">確定</button>
@@ -6901,9 +6982,12 @@ var rdStr=localStorage.getItem('kp_rd_'+e);
 if(rdStr){try{RD=JSON.parse(rdStr);if(!RD.education||!RD.education.length)RD.education=[{}];if(!RD.work||!RD.work.length)RD.work=[{}];}catch(ex){RD={education:[{}],work:[{}],skills:'',summary:''};}}
 else{RD={education:[{}],work:[{}],skills:'',summary:''};}
 photoDataURL=localStorage.getItem('kp_photo_'+e)||'';
-document.getElementById('dashTitle').textContent=CU.name+'さんのマイページ';var _li=document.querySelector('.login-logo img');if(_li){var _dl=document.getElementById('dashLogo');if(_dl)_dl.innerHTML='<img src="'+_li.src+'" alt="建築パス">';var _whl=document.querySelectorAll('.wiz-home-logo');for(var _wh=0;_wh<_whl.length;_wh++)_whl[_wh].src=_li.src;}goTo('pageDash');}
+var cdStr=localStorage.getItem('kp_cd_'+e);
+if(cdStr){try{CD=JSON.parse(cdStr);}catch(ex){CD={works:[],summary:'',summaryAuto:true,skillsExp:'',pcSkills:'',certs:[],pr:'',workOpen:0,outputOrder:'asc'};}}
+else{CD={works:[],summary:'',summaryAuto:true,skillsExp:'',pcSkills:'',certs:[],pr:'',workOpen:0,outputOrder:'asc'};}
+document.getElementById('dashTitle').textContent=CU.name+'さんのマイページ';var _li=document.querySelector('.login-logo img');if(_li){var _dl=document.getElementById('dashLogo');if(_dl)_dl.innerHTML='<img src="'+_li.src+'" alt="建築パス">';var _whl=document.querySelectorAll('.wiz-home-logo');for(var _wh=0;_wh<_whl.length;_wh++)_whl[_wh].src=_li.src;}goTo('pageDash');setTimeout(checkScoreNotify,300);}
 function doLogout(){CU=null;try{localStorage.removeItem('kp_session');localStorage.removeItem('kp_page');}catch(ex){}RD={education:[{}],work:[{}],skills:'',summary:''};photoDataURL='';goTo('pageLogin');}
-function goToDash(){persistRD();persistCD();goTo('pageDash');}
+function goToDash(){persistRD();if(CD.works&&CD.works.some(function(w){return w.company;}))persistCD();goTo('pageDash');checkScoreNotify();}
 /* v8マイグレーション済み — 処理削除（再実行によるデータ消失を防止） */
 function persistRD(){try{
   if(!CU||!CU.email)return;
@@ -6913,6 +6997,7 @@ function persistRD(){try{
 }catch(e){}}
 function persistCD(){try{
   if(!CU||!CU.email)return;
+  if(!CD.works||!CD.works.length||!CD.works.some(function(w){return w.company;}))return;
   var j=JSON.stringify(CD);if(!j||j.length<10)return;
   localStorage.setItem('kp_cd_'+CU.email,j);
 }catch(e){}}function startResume(){RS=1;
@@ -7012,6 +7097,930 @@ function hideDeptSuggest(el){
   },200);
 }
 function toggleCertDate(cb){saveRS();drawRS();}function parseCertOtherStr(s){if(!s)return [];var m=s.match(/^(\d{4})\u5e74(\d{1,2})\u6708[\s\u3000]+(.+)$/);if(m){var mm=m[2].length===1?'0'+m[2]:m[2];return [{name:m[3].replace(/\s*取得$/,''),date:m[1]+'-'+mm}];}return [{name:s,date:''}];}function addCertOther(){saveRS();if(!RD.certOther||typeof RD.certOther==='string')RD.certOther=[];RD.certOther.push({name:'',date:''});drawRS();}function removeCertOther(idx){saveRS();if(RD.certOther&&RD.certOther.length>1)RD.certOther.splice(idx,1);drawRS();}function addWork(){saveRS();RD.work.push({});drawRS();}function useTmpl(type,idx){if(type===1){var el=document.getElementById('rMotivation');if(el){el.value=MT[idx];saveRS();}}else if(type===2){var el=document.getElementById('rPR');if(el){el.value=PT[idx];saveRS();}}}function onPhotoChange(input){if(!input.files||!input.files[0])return;var reader=new FileReader();reader.onload=function(e){cropState.originalDataURL=e.target.result;cropState.zoom=1;cropState.offsetX=0;cropState.offsetY=0;var img=document.getElementById('cropImage');if(img){img.src=cropState.originalDataURL;img.onload=function(){updateCropPreview();};}var slider=document.getElementById('zoomSlider');if(slider)slider.value='1';var zv=document.getElementById('zoomValue');if(zv)zv.textContent='100%';document.getElementById('cropModal').classList.add('open');initCropDrag();};reader.readAsDataURL(input.files[0]);}function updateCropPreview(){var zoomVal=parseFloat(document.getElementById('zoomSlider').value);cropState.zoom=zoomVal;document.getElementById('zoomValue').textContent=Math.round(zoomVal*100)+'%';var img=document.getElementById('cropImage');if(img&&img.naturalWidth){var nw=img.naturalWidth,nh=img.naturalHeight;var FRAME_W=225,FRAME_H=300;var sw=FRAME_W/nw,sh=FRAME_H/nh;var base=Math.max(sw,sh);var s=base*zoomVal;img.style.width=(nw*s)+'px';img.style.height=(nh*s)+'px';img.style.left=cropState.offsetX+'px';img.style.top=cropState.offsetY+'px';}}function confirmCrop(){var frame=document.getElementById('cropFrame');var origBorder=frame.style.border;frame.style.border='2px solid transparent';html2canvas(frame,{scale:2,useCORS:true,backgroundColor:null}).then(function(canvas){frame.style.border=origBorder;photoDataURL=canvas.toDataURL('image/png');var img=document.getElementById('photoPreview');if(img){img.src=photoDataURL;img.style.display='block';}var ph=document.getElementById('photoPlaceholder');if(ph)ph.style.display='none';document.getElementById('cropModal').classList.remove('open');updateA4();});}function cancelCrop(){cropState.originalDataURL='';document.getElementById('cropModal').classList.remove('open');}
+
+/* ========== 完成度スコア計算 ========== */
+function calcProfileScore(){
+  var score=0, max=0;
+  /* --- 履歴書 (RD) 50点満点 --- */
+  // 氏名 5点
+  max+=5; if(RD.sei && RD.mei) score+=5;
+  // 生年月日 5点
+  max+=5; if(RD.birth) score+=5;
+  // 住所 5点
+  max+=5; if(RD.address) score+=5;
+  // 電話番号 5点
+  max+=5; if(RD.phone) score+=5;
+  // 証明写真 5点
+  max+=5; if(photoDataURL) score+=5;
+  // 学歴 10点（1件で5, 2件以上で10）
+  max+=10;
+  var eduCount=(RD.education||[]).filter(function(e){return e&&e.school;}).length;
+  if(eduCount>=2) score+=10; else if(eduCount>=1) score+=5;
+  // 職歴 10点（1件で5, 2件以上で10）
+  max+=10;
+  var workCount=(RD.work||[]).filter(function(w){return w&&w.company;}).length;
+  if(workCount>=2) score+=10; else if(workCount>=1) score+=5;
+  // 志望動機 5点（100文字以上で満点、50文字以上で3点）
+  max+=5;
+  var motLen=(RD.motivation||'').length;
+  if(motLen>=100) score+=5; else if(motLen>=50) score+=3;
+
+  /* --- 職務経歴書 (CD) 50点満点 --- */
+  // 職歴概要/サマリー 10点（100文字以上で満点、50文字以上で5点）
+  max+=10;
+  var sumLen=(CD.summary||'').length;
+  if(sumLen>=100) score+=10; else if(sumLen>=50) score+=5;
+  // プロジェクト実績 15点（構造経験含む）
+  max+=15;
+  var projCount=0, hasStruct=false;
+  if(CD.works){
+    for(var i=0;i<CD.works.length;i++){
+      var projs=CD.works[i].projects||[];
+      for(var j=0;j<projs.length;j++){
+        if(projs[j].name||projs[j].year) projCount++;
+        if(projs[j].struct) hasStruct=true;
+      }
+    }
+  }
+  if(projCount>=3) score+=10; else if(projCount>=1) score+=5;
+  if(hasStruct) score+=5;
+  // 自己PR 10点（150文字以上で満点、80文字以上で5点）
+  max+=10;
+  var prLen=(CD.pr||'').length;
+  if(prLen>=150) score+=10; else if(prLen>=80) score+=5;
+  // 資格 5点（1件以上で満点）
+  max+=5;
+  if(CD.certs&&CD.certs.length>0) score+=5;
+  // スキル・経験 10点（skillsExpまたはpcSkillsに内容があれば）
+  max+=10;
+  var skillLen=(CD.skillsExp||'').length+(CD.pcSkills||'').length;
+  if(skillLen>=50) score+=10; else if(skillLen>=20) score+=5;
+
+  return {score:score, max:max, pct:max>0?Math.round(score/max*100):0};
+}
+/* 80%超え通知（1回だけ） */
+function checkScoreNotify(){
+  var result=calcProfileScore();
+  // ダッシュボードのプログレスバー更新
+  updateScoreBar(result);
+  // 80%超え通知
+  if(result.pct>=80){
+    var notifiedKey='kp_score_notified_'+(CU&&CU.email?CU.email:'');
+    var already=false;
+    try{already=localStorage.getItem(notifiedKey)==='1';}catch(e){}
+    if(!already){
+      try{localStorage.setItem(notifiedKey,'1');}catch(e){}
+      sendScoreNotification(result);
+    }
+  }
+}
+function sendScoreNotification(result){
+  /* 制作会社がAPIエンドポイントを用意したら、ここのURLを変更 */
+  var endpoint='/api/score-notify';
+  var payload={
+    email:CU?CU.email:'',
+    name:CU?CU.name:'',
+    score:result.score,
+    pct:result.pct,
+    sei:RD.sei||'',
+    mei:RD.mei||'',
+    phone:RD.phone||'',
+    hasPhoto:!!photoDataURL,
+    workCount:(RD.work||[]).filter(function(w){return w&&w.company;}).length,
+    projCount:0,
+    hasCerts:(CD.certs&&CD.certs.length>0),
+    timestamp:new Date().toISOString()
+  };
+  if(CD.works){for(var i=0;i<CD.works.length;i++){payload.projCount+=(CD.works[i].projects||[]).filter(function(p){return p&&(p.name||p.year);}).length;}}
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST',endpoint,true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.send(JSON.stringify(payload));
+  }catch(e){/* サーバー未設定時はサイレントに失敗 */}
+}
+function updateScoreBar(result){
+  var bar=document.getElementById('scoreBar');
+  var label=document.getElementById('scoreLabel');
+  var detail=document.getElementById('scoreDetail');
+  if(!bar||!label)return;
+  bar.style.width=result.pct+'%';
+  if(result.pct>=80){bar.style.background='#43a047';}
+  else if(result.pct>=50){bar.style.background='#fb8c00';}
+  else{bar.style.background='#e53935';}
+  label.textContent='完成度 '+result.pct+'%';
+  if(detail){
+    var items=[];
+    if(!RD.sei||!RD.mei)items.push('氏名');
+    if(!RD.birth)items.push('生年月日');
+    if(!RD.address)items.push('住所');
+    if(!RD.phone)items.push('電話番号');
+    if(!photoDataURL)items.push('証明写真');
+    if(!(RD.education||[]).some(function(e){return e&&e.school;}))items.push('学歴');
+    if(!(RD.work||[]).some(function(w){return w&&w.company;}))items.push('職歴');
+    if((RD.motivation||'').length<50)items.push('志望動機');
+    if((CD.summary||'').length<50)items.push('職歴概要');
+    if(!CD.works||!CD.works.some(function(w){return(w.projects||[]).some(function(p){return p.name||p.year;});}))items.push('施工実績');
+    if((CD.pr||'').length<80)items.push('自己PR');
+    if(items.length>0){
+      detail.innerHTML='<span style="color:#e65100">未入力: '+items.join('、')+'</span>';
+    }else{
+      detail.innerHTML='<span style="color:#2e7d32">すべての項目が入力されています！</span>';
+    }
+  }
+}
+
+/* ========== 書類読み取り（Claude Vision API → サーバープロキシ経由） ========== */
+var ocrImages=[];/* {dataURL,name} の配列 */
+function openOCR(){
+  document.getElementById('ocrModal').style.display='block';
+  document.getElementById('ocrStep1').style.display='block';
+  document.getElementById('ocrStep2').style.display='none';
+  document.getElementById('ocrStep3').style.display='none';
+  document.getElementById('ocrFileInput').value='';
+  document.getElementById('ocrPreviewArea').innerHTML='';
+  ocrImages=[];ocrUpdateThumbs();
+  var errMsg=document.getElementById('ocrErrorMsg');if(errMsg)errMsg.style.display='none';
+  var dz=document.getElementById('ocrDropZone');
+  var fi=document.getElementById('ocrFileInput');
+  if(!dz._ocrBound){
+    dz._ocrBound=true;
+    dz.addEventListener('click',function(){fi.click();});
+    dz.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();dz.style.borderColor='#2BA84A';dz.style.background='#f0faf2';});
+    dz.addEventListener('dragleave',function(e){e.preventDefault();dz.style.borderColor='#ccc';dz.style.background='#fafafa';});
+    dz.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();dz.style.borderColor='#ccc';dz.style.background='#fafafa';ocrAddFiles(e.dataTransfer.files);});
+    fi.addEventListener('change',function(){ocrAddFiles(fi.files);fi.value='';});
+  }
+}
+function ocrAddFiles(fileList){
+  if(!fileList||!fileList.length)return;
+  for(var i=0;i<fileList.length;i++){
+    var f=fileList[i];
+    if(!f.type.startsWith('image/')){continue;}
+    (function(file){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        ocrImages.push({dataURL:e.target.result,name:file.name});
+        ocrUpdateThumbs();
+      };
+      reader.readAsDataURL(file);
+    })(f);
+  }
+}
+function ocrRemoveImage(idx){ocrImages.splice(idx,1);ocrUpdateThumbs();}
+function ocrUpdateThumbs(){
+  var wrap=document.getElementById('ocrThumbList');
+  var startWrap=document.getElementById('ocrStartWrap');
+  if(!ocrImages.length){wrap.innerHTML='';startWrap.style.display='none';return;}
+  var h='';
+  for(var i=0;i<ocrImages.length;i++){
+    h+='<div style="position:relative;width:80px;height:80px;border-radius:6px;overflow:hidden;border:1px solid #ddd">';
+    h+='<img src="'+ocrImages[i].dataURL+'" style="width:100%;height:100%;object-fit:cover">';
+    h+='<div onclick="ocrRemoveImage('+i+')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;line-height:1">✕</div>';
+    h+='<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:10px;text-align:center;padding:1px">'+(i+1)+'</div>';
+    h+='</div>';
+  }
+  wrap.innerHTML=h;
+  document.getElementById('ocrFileCount').textContent=ocrImages.length+'枚の画像';
+  startWrap.style.display='block';
+}
+function ocrStartRead(){
+  if(!ocrImages.length){alert('画像を選択してください');return;}
+  document.getElementById('ocrStep1').style.display='none';
+  document.getElementById('ocrStep2').style.display='block';
+  document.getElementById('ocrStep3').style.display='none';
+  document.getElementById('ocrProgressBar').style.width='5%';
+  document.getElementById('ocrProgressBar').style.background='#2BA84A';
+  document.getElementById('ocrStatusText').textContent='読み取りを開始しています…';
+  /* プレビュー */
+  var ph='';
+  for(var i=0;i<ocrImages.length;i++){ph+='<img src="'+ocrImages[i].dataURL+'" style="max-height:120px;border-radius:6px;border:1px solid #ddd;margin:0 4px">';}
+  document.getElementById('ocrPreviewArea').innerHTML='<div style="display:flex;gap:6px;overflow-x:auto;justify-content:center">'+ph+'</div>';
+  ocrRecognize();
+}
+function closeOCR(){document.getElementById('ocrModal').style.display='none';}
+function ocrTypeSelect(){
+  var v=document.querySelector('input[name="ocrType"]:checked').value;
+  var lr=document.getElementById('ocrLabelResume'),lc=document.getElementById('ocrLabelCareer'),lb=document.getElementById('ocrLabelCombined');
+  lr.style.borderColor=v==='resume'?'#2BA84A':'#e0e0e0';lr.style.background=v==='resume'?'#f0faf2':'';
+  lc.style.borderColor=v==='career'?'#2BA84A':'#e0e0e0';lc.style.background=v==='career'?'#f0faf2':'';
+  if(lb){lb.style.borderColor=v==='combined'?'#2BA84A':'#e0e0e0';lb.style.background=v==='combined'?'#f0faf2':'';}
+}
+
+
+/* ===== OCR実行: Claude Vision API ===== */
+async function ocrRecognize(){
+  var pBar=document.getElementById('ocrProgressBar');
+  var pText=document.getElementById('ocrStatusText');
+  var docType=document.querySelector('input[name="ocrType"]:checked').value;
+
+  /* 全画像のbase64・mediaTypeを準備 */
+  var imgData=[];
+  for(var i=0;i<ocrImages.length;i++){
+    var du=ocrImages[i].dataURL;
+    var b64=du.split(',')[1];
+    var mt=du.match(/^data:(image\/[^;]+);/);
+    imgData.push({b64:b64,mediaType:mt?mt[1]:'image/jpeg'});
+  }
+  if(!imgData.length){pText.textContent='画像がありません';return;}
+
+  var prompt='';
+  if(docType==='resume'){
+    prompt='この画像は日本語の履歴書です。全項目を正確に読み取り、以下のJSON形式で返してください。JSONのみ出力してください。\n\n{"name":"氏名（姓 名）","kana":"ふりがな（ひらがな 姓 名）","birth":"YYYY-MM-DD","gender":"男性 or 女性","postal":"〒XXX-XXXX","address":"住所（建物名・部屋番号含む）","addressKana":"住所のふりがな（ひらがな）。記載がない場合は住所の漢字から読みを推測してひらがなで生成する（例: 東京都渋谷区→とうきょうとしぶやく）","phone":"電話番号","email":"メールアドレス","education":"学歴を1行ずつ。形式: YYYY年MM月 学校名 学部学科 入学/卒業","work":"職歴を1行ずつ。画像の職歴欄に書かれている内容を上から順にそのまま転記する。形式例:\\n2023年3月 株式会社○○ 入社\\n2024年5月 一身上の都合により退職\\n2024年6月 株式会社△△ 入社\\n現在に至る\\n書かれていない退職行を勝手に追加しないこと。「現在に至る」と書いてあればそのまま含める。","certs":"資格を1行ずつ。形式: YYYY年MM月 資格名 取得","motivation":"志望動機（全文そのまま）","hope":"本人希望欄（全文そのまま）","photo_bbox":"証明写真がある場合、写真領域の位置を画像全体に対する割合(0〜1)で {x:左端,y:上端,w:幅,h:高さ} で返す。写真がなければ空オブジェクト{}"}\n\n注意: 令和→西暦(令和6=2024)、平成→西暦(平成31=2019)、昭和→西暦(昭和64=1989)。読み取れない項目は空文字。複数ページにまたがる場合は統合してください。画像に書かれていない情報を推測・補完しないこと。';
+  }else if(docType==='combined'){
+    prompt='この画像は日本語のレジュメ（履歴書と職務経歴書の混合型）です。全項目を正確に読み取り、以下のJSON形式で返してください。JSONのみ出力してください。\n\n{"name":"氏名（姓 名）","kana":"ふりがな（ひらがな・カタカナどちらでも）","birth":"YYYY-MM-DD","gender":"男性 or 女性","postal":"〒XXX-XXXX","address":"住所（建物名・部屋番号含む）","addressKana":"住所のふりがな（ひらがな）。記載がない場合は住所の漢字から読みを推測してひらがなで生成する（例: 東京都渋谷区→とうきょうとしぶやく）","phone":"電話番号","email":"メールアドレス","education":"学歴を1行ずつ。形式: YYYY年MM月 学校名 学部学科 入学/卒業/修了","work":"職歴（入退社）を1行ずつ。形式: YYYY年MM月 会社名 入社/退職。現在在籍中なら最後に「現在に至る」。書かれていない退職を追加しない。","certs":"資格を1行ずつ。形式: YYYY年MM月 資格名 取得","photo_bbox":"証明写真がある場合、写真領域の位置を画像全体に対する割合(0〜1)で {x:左端,y:上端,w:幅,h:高さ} で返す。写真がなければ空オブジェクト{}","summary":"職務要約・職務概要（全文そのまま）","works":[{"company":"会社名","from":"YYYY-MM","to":"YYYY-MM（現在なら空）","employment":"雇用形態","bizSummary":"業務概要・業務内容の概要","jobContent":"業務内容の各項目を改行区切り","results":"実績・成果の各項目を改行区切り","resultFactors":"実績が出た要因があれば改行区切り","projects":[{"year":"YYYY","name":"工事名・プロジェクト名","tou":"棟数","cost":"契約金額（万円）","area":"延床面積（㎡）","struct":"構造（RC造、S造、SRC造、木造等）","floors":"階数（地上○階地下○階）"}]}],"skills":"活かせる経験・知識・技術・スキル（全文）","pr":"自己PR（全文そのまま）","motivation":"志望動機があれば全文","hope":"本人希望欄があれば全文"}\n\nworksは会社ごとに1要素。works内のprojectsは施工実績・担当案件・主要プロジェクトがあれば抽出（なければ空配列[]）。注意: 令和→西暦(令和6=2024)、平成→西暦(平成31=2019)。読み取れない項目は空文字。複数ページにまたがる場合は統合。画像に書かれていない情報を推測・補完しないこと。';
+  }else{
+    prompt='この画像は日本語の職務経歴書です。全項目を正確に読み取り、以下のJSON形式で返してください。JSONのみ出力してください。\n\n{"summary":"職務要約（全文そのまま）","works":[{"company":"会社名","from":"YYYY-MM（入社年月）","to":"YYYY-MM（退社年月。現在在籍中なら空文字）","employment":"雇用形態（正社員等）","bizSummary":"【業務概要】の内容","jobContent":"【業務内容】の各項目を改行区切り","results":"【実績・成果】の各項目を改行区切り","resultFactors":"【実績が出た要因】の各項目を改行区切り","projects":[{"year":"YYYY","name":"工事名・プロジェクト名","tou":"棟数","cost":"契約金額（万円）","area":"延床面積（㎡）","struct":"構造（RC造、S造、SRC造、木造等）","floors":"階数（地上○階地下○階）"}]}],"skills":"活かせる経験・知識・技術（全文）","certs":"資格を1行ずつ。形式: YYYY年MM月 資格名 取得","pr":"自己PR（全文そのまま）"}\n\nworksは会社ごとに1要素。画像に書かれている全ての会社を漏れなく含める。works内のprojectsは施工実績・担当案件・主要プロジェクトがあれば抽出（なければ空配列[]）。注意: 令和→西暦(令和6=2024)、平成→西暦(平成31=2019)。読み取れない項目は空文字。複数ページにまたがる場合は統合してください。';
+  }
+
+  var errMsg=document.getElementById('ocrErrorMsg');
+  if(errMsg)errMsg.style.display='none';
+
+  try{
+    pText.textContent='AIで読み取り中… （'+imgData.length+'枚）';pBar.style.width='15%';
+
+    var content=[];
+    for(var j=0;j<imgData.length;j++){
+      content.push({type:'image',source:{type:'base64',media_type:imgData[j].mediaType,data:imgData[j].b64}});
+    }
+    content.push({type:'text',text:prompt});
+
+    var res=await fetch('/api/ocr-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:4096,messages:[{role:'user',content:content}]})
+    });
+    pBar.style.width='60%';
+
+    if(!res.ok){
+      var eb='';try{eb=await res.text();}catch(e){}
+      var ebMsg='';
+      try{var ej=JSON.parse(eb);ebMsg=(ej.error&&ej.error.message)||'';}catch(e){ebMsg=eb.substring(0,200);}
+      throw new Error('API エラー('+res.status+'): '+ebMsg);
+    }
+
+    var json=await res.json();
+    var txt='';
+    if(json.content){for(var k=0;k<json.content.length;k++){if(json.content[k].type==='text')txt+=json.content[k].text;}}
+    if(!txt)throw new Error('APIからの応答が空です');
+
+    /* JSONパース */
+    var jsonStr=txt;
+    var jm=txt.match(/```json?\s*([\s\S]*?)```/);if(jm)jsonStr=jm[1];
+    jsonStr=jsonStr.trim();
+    if(jsonStr.indexOf('{')>0)jsonStr=jsonStr.substring(jsonStr.indexOf('{'));
+    var lb=jsonStr.lastIndexOf('}');if(lb>=0&&lb<jsonStr.length-1)jsonStr=jsonStr.substring(0,lb+1);
+
+    var parsed=JSON.parse(jsonStr);
+    pBar.style.width='100%';pText.textContent='読み取り完了！（'+imgData.length+'枚）';
+    setTimeout(function(){showOCRResultJSON(parsed,docType);},300);
+
+  }catch(err){
+    console.error('[OCR] error:',err);
+    pBar.style.width='100%';pBar.style.background='#e53935';
+    pText.textContent='読み取りに失敗しました';
+    if(errMsg){
+      errMsg.style.display='block';
+      errMsg.innerHTML='<b>読み取りに失敗しました</b><br><br>'+esc(err.message);
+    }
+    document.getElementById('ocrStep2').style.display='none';
+    document.getElementById('ocrStep1').style.display='block';
+  }
+}
+
+/* ===== Claude API/Netlify結果（JSON）→ フォーム表示 ===== */
+function showOCRResultJSON(data,docType){
+  document.getElementById('ocrStep2').style.display='none';
+  document.getElementById('ocrStep3').style.display='block';
+  var fields=document.getElementById('ocrResultFields');
+  var h='';
+  if(docType==='resume'){
+    h+=ocrField('ocr_name','氏名',data.name||'');
+    h+=ocrField('ocr_kana','ふりがな',data.kana||'');
+    h+=ocrField('ocr_birth','生年月日',data.birth||'');
+    h+=ocrField('ocr_gender','性別',data.gender||'');
+    h+=ocrField('ocr_postal','郵便番号',data.postal||'');
+    h+=ocrField('ocr_address','住所',data.address||'');
+    h+=ocrField('ocr_addressKana','住所ふりがな',data.addressKana||'');
+    h+=ocrField('ocr_phone','電話番号',data.phone||'');
+    h+=ocrField('ocr_email','メール',data.email||'');
+    h+=ocrArea('ocr_education','学歴',data.education||'');
+    h+=ocrArea('ocr_work','職歴',data.work||'');
+    h+=ocrArea('ocr_certs','資格・免許',data.certs||'');
+    h+=ocrArea('ocr_motivation','志望動機',data.motivation||'');
+    h+=ocrField('ocr_hope','本人希望',data.hope||'');
+    if(data.photo_bbox&&data.photo_bbox.x!=null){
+      h+='<input type="hidden" id="ocr_photo_bbox" value="'+esc(JSON.stringify(data.photo_bbox))+'">';
+    }
+  }else if(docType==='combined'){
+    /* レジュメ（混合型）: 履歴書＋職務経歴書の全フィールド */
+    h+='<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:6px;padding:8px;font-size:12px;color:#2e7d32;margin-bottom:10px;font-weight:bold">📋 履歴書データ</div>';
+    h+=ocrField('ocr_name','氏名',data.name||'');
+    h+=ocrField('ocr_kana','ふりがな',data.kana||'');
+    h+=ocrField('ocr_birth','生年月日',data.birth||'');
+    h+=ocrField('ocr_gender','性別',data.gender||'');
+    h+=ocrField('ocr_postal','郵便番号',data.postal||'');
+    h+=ocrField('ocr_address','住所',data.address||'');
+    h+=ocrField('ocr_addressKana','住所ふりがな',data.addressKana||'');
+    h+=ocrField('ocr_phone','電話番号',data.phone||'');
+    h+=ocrField('ocr_email','メール',data.email||'');
+    h+=ocrArea('ocr_education','学歴',data.education||'');
+    h+=ocrArea('ocr_work','職歴（入退社）',data.work||'');
+    h+=ocrArea('ocr_certs','資格・免許',data.certs||'');
+    h+=ocrArea('ocr_motivation','志望動機',data.motivation||'');
+    h+=ocrField('ocr_hope','本人希望',data.hope||'');
+    if(data.photo_bbox&&data.photo_bbox.x!=null){
+      h+='<input type="hidden" id="ocr_photo_bbox" value="'+esc(JSON.stringify(data.photo_bbox))+'">';
+    }
+    h+='<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;padding:8px;font-size:12px;color:#1565c0;margin:10px 0;font-weight:bold">💼 職務経歴書データ</div>';
+    h+=ocrArea('ocr_summary','職務要約',data.summary||'');
+    if(data.works&&data.works.length){
+      for(var wi=0;wi<data.works.length;wi++){
+        var wk=data.works[wi];
+        var wLabel='【'+(wk.company||'会社'+(wi+1))+'】';
+        var wLines=[];
+        if(wk.from)wLines.push('期間: '+wk.from+(wk.to?' ～ '+wk.to:' ～ 現在'));
+        if(wk.employment)wLines.push('雇用形態: '+wk.employment);
+        if(wk.bizSummary)wLines.push('業務概要: '+wk.bizSummary);
+        if(wk.jobContent)wLines.push('業務内容:\n'+wk.jobContent);
+        if(wk.results)wLines.push('実績・成果:\n'+wk.results);
+        if(wk.resultFactors)wLines.push('実績が出た要因:\n'+wk.resultFactors);
+        if(wk.projects&&wk.projects.length){
+          for(var pi=0;pi<wk.projects.length;pi++){
+            var pj=wk.projects[pi];var pParts=[];
+            if(pj.year)pParts.push(pj.year+'年');if(pj.name)pParts.push(pj.name);
+            if(pj.tou)pParts.push(pj.tou);if(pj.cost)pParts.push(pj.cost+'万円');
+            if(pj.area)pParts.push(pj.area+'㎡');if(pj.struct)pParts.push(pj.struct);if(pj.floors)pParts.push(pj.floors);
+            if(pParts.length)wLines.push('実績'+(pi+1)+': '+pParts.join(' / '));
+          }
+        }
+        h+=ocrArea('ocr_work_'+wi,wLabel,wLines.join('\n'));
+      }
+      h+='<input type="hidden" id="ocr_works_json" value="'+esc(JSON.stringify(data.works))+'">';
+    }
+    h+=ocrArea('ocr_skills','活かせる経験・スキル',data.skills||'');
+    h+=ocrArea('ocr_pr','自己PR',data.pr||'');
+  }else{
+    h+=ocrArea('ocr_summary','職務要約',data.summary||'');
+    /* 会社ごとの構造化データを表示 */
+    if(data.works&&data.works.length){
+      for(var wi=0;wi<data.works.length;wi++){
+        var wk=data.works[wi];
+        var wLabel='【'+(wk.company||'会社'+(wi+1))+'】';
+        var wLines=[];
+        if(wk.from)wLines.push('期間: '+wk.from+(wk.to?' ～ '+wk.to:' ～ 現在'));
+        if(wk.employment)wLines.push('雇用形態: '+wk.employment);
+        if(wk.bizSummary)wLines.push('業務概要: '+wk.bizSummary);
+        if(wk.jobContent)wLines.push('業務内容:\n'+wk.jobContent);
+        if(wk.results)wLines.push('実績・成果:\n'+wk.results);
+        if(wk.resultFactors)wLines.push('実績が出た要因:\n'+wk.resultFactors);
+        if(wk.projects&&wk.projects.length){
+          for(var pi=0;pi<wk.projects.length;pi++){
+            var pj=wk.projects[pi];var pParts=[];
+            if(pj.year)pParts.push(pj.year+'年');if(pj.name)pParts.push(pj.name);
+            if(pj.tou)pParts.push(pj.tou);if(pj.cost)pParts.push(pj.cost+'万円');
+            if(pj.area)pParts.push(pj.area+'㎡');if(pj.struct)pParts.push(pj.struct);if(pj.floors)pParts.push(pj.floors);
+            if(pParts.length)wLines.push('実績'+(pi+1)+': '+pParts.join(' / '));
+          }
+        }
+        h+=ocrArea('ocr_work_'+wi,wLabel,wLines.join('\n'));
+      }
+      h+='<input type="hidden" id="ocr_works_json" value="'+esc(JSON.stringify(data.works))+'">';
+    }else if(data.projects){
+      h+=ocrArea('ocr_projects','職務経歴',data.projects||'');
+    }
+    h+=ocrArea('ocr_skills','活かせる経験・知識・技術',data.skills||'');
+    h+=ocrArea('ocr_certs2','資格',data.certs||'');
+    h+=ocrArea('ocr_pr','自己PR',data.pr||'');
+  }
+  fields.innerHTML=h;
+}
+
+/* ===== 読み取り結果をフォームに表示 ===== */
+function showOCRResult(rawText){
+  document.getElementById('ocrStep2').style.display='none';
+  document.getElementById('ocrStep3').style.display='block';
+  var docType=document.querySelector('input[name="ocrType"]:checked').value;
+  var fields=document.getElementById('ocrResultFields');
+  var h='';
+  /* 生テキスト表示（ユーザーが確認・コピペ用） */
+  h+='<div style="margin-bottom:14px"><label style="font-size:12px;font-weight:bold;color:#888;display:block;margin-bottom:3px">読み取ったテキスト</label>';
+  h+='<textarea id="ocr_raw" rows="5" style="width:100%;padding:8px;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;font-family:monospace;box-sizing:border-box;resize:vertical;background:#f9f9f9">'+esc(rawText)+'</textarea></div>';
+  if(docType==='resume'){
+    var p=parseResumeText(rawText);
+    h+=ocrField('ocr_name','氏名',p.name);
+    h+=ocrField('ocr_kana','ふりがな',p.kana);
+    h+=ocrField('ocr_birth','生年月日',p.birth);
+    h+=ocrField('ocr_address','住所',p.address);
+    h+=ocrField('ocr_phone','電話番号',p.phone);
+    h+=ocrField('ocr_email','メール',p.email);
+    h+=ocrArea('ocr_education','学歴',p.education);
+    h+=ocrArea('ocr_work','職歴',p.work);
+    h+=ocrArea('ocr_certs','資格・免許',p.certs);
+    h+=ocrArea('ocr_motivation','志望動機',p.motivation);
+    h+=ocrField('ocr_hope','本人希望',p.hope);
+  }else{
+    var p=parseCareerText(rawText);
+    h+=ocrArea('ocr_summary','職務要約',p.summary);
+    h+=ocrArea('ocr_projects','職務経歴',p.projects);
+    h+=ocrArea('ocr_skills','活かせる経験・知識・技術',p.skills);
+    h+=ocrArea('ocr_certs2','資格',p.certs);
+    h+=ocrArea('ocr_pr','自己PR',p.pr);
+  }
+  h+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px;font-size:12px;color:#f57f17;margin-top:8px">💡 読み取り精度が低い場合は、各欄を手動で修正してから「入力に反映する」を押してください</div>';
+  fields.innerHTML=h;
+}
+
+/* ===== テキスト→各フィールドにパース ===== */
+function parseResumeText(text){
+  var r={name:'',kana:'',birth:'',address:'',phone:'',email:'',education:'',work:'',certs:'',motivation:'',hope:''};
+  var lines=text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  var flat=text.replace(/\n/g,' ');
+  /* 氏名 */
+  for(var i=0;i<lines.length;i++){var m=lines[i].match(/氏\s*名[\s　:：]*(.{2,12})/);if(m){r.name=m[1].replace(/[男女]性|性別/g,'').trim();break;}}
+  /* ふりがな */
+  for(var i=0;i<lines.length;i++){var m=lines[i].match(/[ふフ][りリ][がガ][なナ][\s　:：]*(.+)/);if(m){r.kana=m[1].trim();break;}}
+  /* 生年月日 */
+  var bm=flat.match(/生年月日[^0-9]*(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*[月\/\-]?\s*(\d{1,2})/);
+  if(bm)r.birth=bm[1]+'-'+(bm[2].length<2?'0'+bm[2]:bm[2])+'-'+(bm[3].length<2?'0'+bm[3]:bm[3]);
+  /* 住所 */
+  for(var i=0;i<lines.length;i++){if(lines[i].match(/[都道府県]/)&&lines[i].length>6&&!lines[i].match(/学校|高等/)){r.address=lines[i].replace(/現住所|ふりがな/g,'').trim();if(r.address.length>4)break;else r.address='';}}
+  /* 電話 */
+  var pm=flat.match(/(0\d{1,4})[\s\-ー](\d{1,4})[\s\-ー](\d{3,4})/);if(pm)r.phone=pm[1]+'-'+pm[2]+'-'+pm[3];
+  /* メール */
+  var em=flat.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);if(em)r.email=em[1];
+  /* セクション分割 */
+  var sec=splitSections(text,['学歴','職歴','資格','免許','志望動機','志望の動機','本人希望']);
+  r.education=sec['学歴']||'';
+  r.work=sec['職歴']||'';
+  r.certs=(sec['資格']||'')+(sec['免許']?'\n'+sec['免許']:'');
+  r.motivation=sec['志望動機']||sec['志望の動機']||'';
+  r.hope=sec['本人希望']||'';
+  return r;
+}
+function parseCareerText(text){
+  var r={summary:'',projects:'',skills:'',certs:'',pr:''};
+  var sec=splitSections(text,['職務要約','職務経歴','職歴','活かせる経験','活かせる','資格','自己PR','自己ＰＲ']);
+  r.summary=sec['職務要約']||'';
+  r.projects=(sec['職務経歴']||sec['職歴']||'').trim();
+  r.skills=sec['活かせる経験']||sec['活かせる']||'';
+  r.certs=sec['資格']||'';
+  r.pr=sec['自己PR']||sec['自己ＰＲ']||'';
+  if(!r.summary&&!r.projects&&!r.pr)r.projects=text;
+  return r;
+}
+function splitSections(text,keywords){
+  var result={};var lines=text.split(/\n/);var curKey='';var buf=[];
+  for(var i=0;i<lines.length;i++){
+    var ln=lines[i].trim();if(!ln)continue;
+    var stripped=ln.replace(/^[■●◆▶▼・\[\]【】\s]+/,'');
+    var matched='';
+    for(var k=0;k<keywords.length;k++){
+      if(stripped.indexOf(keywords[k])===0&&stripped.length<keywords[k].length+15){matched=keywords[k];break;}
+    }
+    if(matched){if(curKey)result[curKey]=buf.join('\n').trim();curKey=matched;buf=[];}
+    else if(curKey)buf.push(ln);
+  }
+  if(curKey)result[curKey]=buf.join('\n').trim();
+  return result;
+}
+
+/* 配列・オブジェクトを安全にテキスト化 */
+function ocrToStr(v){
+  if(!v)return '';
+  if(typeof v==='string')return v;
+  if(Array.isArray(v)){
+    return v.map(function(item){
+      if(typeof item==='string')return item;
+      if(item&&typeof item==='object'){
+        /* {school:"...",date:"..."} 等のオブジェクト配列を行テキスト化 */
+        var parts=[];for(var k in item){if(item[k])parts.push(item[k]);}
+        return parts.join(' ');
+      }
+      return String(item);
+    }).join('\n');
+  }
+  if(typeof v==='object'){
+    var parts=[];for(var k in v){if(v[k])parts.push(v[k]);}
+    return parts.join('\n');
+  }
+  return String(v);
+}
+function ocrField(id,label,val){
+  return '<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:bold;color:#555;display:block;margin-bottom:3px">'+label+'</label><input id="'+id+'" value="'+esc(ocrToStr(val))+'" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box"></div>';
+}
+function ocrArea(id,label,val){
+  var sv=ocrToStr(val);
+  var rows=Math.max(3,Math.min(10,sv.split('\n').length+1));
+  return '<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:bold;color:#555;display:block;margin-bottom:3px">'+label+'</label><textarea id="'+id+'" rows="'+rows+'" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;resize:vertical">'+esc(sv)+'</textarea></div>';
+}
+
+/* 読み取り結果をRD/CDに反映 */
+function ocrApply(){
+  var ocrType=document.querySelector('input[name="ocrType"]:checked').value;
+  if(ocrType==='resume'){
+    /* 氏名 */
+    var nameVal=(document.getElementById('ocr_name')||{}).value||'';
+    if(nameVal){var parts=nameVal.split(/[\s　]+/);if(parts.length>=2){RD.sei=parts[0];RD.mei=parts.slice(1).join('');}else{RD.sei=nameVal;}}
+    /* ふりがな */
+    var kanaVal=(document.getElementById('ocr_kana')||{}).value||'';
+    if(kanaVal){var kp=kanaVal.split(/[\s　]+/);if(kp.length>=2){RD.kanaSei=kp[0];RD.kanaMei=kp.slice(1).join('');}else{RD.kanaSei=kanaVal;}}
+    /* 生年月日 */
+    var bv=(document.getElementById('ocr_birth')||{}).value||'';
+    if(bv){
+      var bm=bv.match(/(\d{4})[年\-\/](\d{1,2})[月\-\/]?(\d{0,2})/);
+      if(bm){RD.birth=bm[1]+'-'+(bm[2].length<2?'0'+bm[2]:bm[2])+(bm[3]?'-'+(bm[3].length<2?'0'+bm[3]:bm[3]):'');}
+      else{RD.birth=bv;}
+    }
+    /* 性別 */
+    var gv=(document.getElementById('ocr_gender')||{}).value||'';
+    if(gv)RD.gender=gv;
+    /* 郵便番号 */
+    var postalV=(document.getElementById('ocr_postal')||{}).value||'';
+    if(postalV)RD.zip=postalV.replace(/〒/g,'').trim();
+    /* 住所 */
+    var av=(document.getElementById('ocr_address')||{}).value||'';if(av)RD.address=av;
+    /* 住所ふりがな */
+    var akv=(document.getElementById('ocr_addressKana')||{}).value||'';if(akv)RD.addrKana=katakanaToHiragana(akv);
+    /* 電話 */
+    var pv=(document.getElementById('ocr_phone')||{}).value||'';if(pv)RD.phone=pv;
+    /* メール */
+    var ev=(document.getElementById('ocr_email')||{}).value||'';if(ev)RD.email=ev;
+    /* 学歴パース */
+    var eduText=(document.getElementById('ocr_education')||{}).value||'';
+    if(eduText){
+      var eduLines=eduText.split(/\n/).filter(function(l){return l.trim()&&!l.trim().match(/^学歴$|^職歴$/);});
+      RD.education=[];
+      for(var i=0;i<eduLines.length;i++){
+        var el=eduLines[i].trim();
+        var em=el.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(em&&em[3]){
+          var mm=em[2].length<2?'0'+em[2]:em[2];
+          var schoolText=em[3].trim();
+          /* 「入学」「卒業」等をtypeフィールドに分離（Excel/A4表示でschool+dept+typeとして結合される） */
+          var typeMatch=schoolText.match(/\s*(入学|卒業|中退|中途退学|修了|転入学|編入学)\s*$/);
+          var edType=typeMatch?typeMatch[1]:'';
+          var edSchool=typeMatch?schoolText.replace(typeMatch[0],'').trim():schoolText;
+          /* 学部・学科を分離（「○○大学 ○○学部」→ school=○○大学, dept=○○学部） */
+          var deptMatch=edSchool.match(/^(.+?)\s+([一-鿿]+学部.*)$/);
+          var dept='';
+          if(deptMatch){edSchool=deptMatch[1];dept=deptMatch[2];}
+          RD.education.push({school:edSchool,date:em[1]+'-'+mm,dept:dept,type:edType});
+        }
+        else if(el.length>2){RD.education.push({school:el,date:'',dept:'',type:''});}
+      }
+      if(!RD.education.length)RD.education=[{}];
+    }
+    /* 職歴パース */
+    var workText=(document.getElementById('ocr_work')||{}).value||'';
+    if(workText){
+      var workLines=workText.split(/\n/).filter(function(l){return l.trim()&&!l.trim().match(/^学歴$|^職歴$|^以上$|^現在に至る$/);});
+      RD.work=[];
+      for(var i=0;i<workLines.length;i++){
+        var wl=workLines[i].trim();
+        var wm=wl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(wm&&wm[3]){
+          var mm=wm[2].length<2?'0'+wm[2]:wm[2];
+          var rest=wm[3].trim();
+          if(rest.match(/入社/)){
+            RD.work.push({company:rest.replace(/\s*(株式会社|有限会社|合同会社)?\s*入社\s*/g,function(m,p1){return p1||'';}).trim(),from:wm[1]+'-'+mm,to:'',reason:''});
+          }else if(rest.match(/退社|退職/)&&RD.work.length>0){
+            RD.work[RD.work.length-1].to=wm[1]+'-'+mm;
+            /* 退職理由を保存（「一身上の都合により退職」等） */
+            var reasonMatch=rest.match(/(一身上の都合により|会社都合により|契約期間満了により|定年により)?\s*(退職|退社)/);
+            if(reasonMatch&&reasonMatch[1])RD.work[RD.work.length-1].reason=reasonMatch[1]+(reasonMatch[2]||'退職');
+          }else if(!rest.match(/入社|退社|退職/)&&rest.length>2){
+            /* 入社/退社がない行 = 新しい会社として追加 */
+            RD.work.push({company:rest,from:wm[1]+'-'+mm,to:'',reason:''});
+          }
+        }
+      }
+      if(!RD.work.length)RD.work=[{}];
+    }
+    /* 志望動機・本人希望・資格 */
+    var motVal=(document.getElementById('ocr_motivation')||{}).value||'';if(motVal)RD.motivation=motVal;
+    var hopeVal=(document.getElementById('ocr_hope')||{}).value||'';if(hopeVal)RD.hopeOther=hopeVal;
+    var certsVal=(document.getElementById('ocr_certs')||{}).value||'';
+    if(certsVal){
+      var cLines=certsVal.split(/\n/).filter(function(l){return l.trim();});
+      RD.certs=[];
+      for(var i=0;i<cLines.length;i++){
+        var cl=cLines[i].trim();
+        var cm=cl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(cm&&cm[3]){var mm=cm[2].length<2?'0'+cm[2]:cm[2];RD.certs.push({name:cm[3].replace(/\s*(取得|合格)\s*$/,'').trim(),date:cm[1]+'-'+mm});}
+        else if(cl.length>1){RD.certs.push({name:cl,date:''});}
+      }
+      if(!RD.certs.length)RD.certs=[{}];
+    }
+    /* OCR画像・bbox退避（closeOCR前にコピー） */
+    var ocrImgCopy=ocrImages.length>0?ocrImages[0].dataURL:'';
+    var bboxEl=document.getElementById('ocr_photo_bbox');
+    var ocrBbox=null;
+    if(bboxEl){try{ocrBbox=JSON.parse(bboxEl.value);}catch(e){}}
+    persistRD();
+    closeOCR();
+    /* 履歴書ウィザードを開いてStep1（プロフィール）から表示 */
+    RS=1;goTo('pageResume');drawRS();updateA4();
+    /* AIが検出した写真周辺を切り出し → クロップモーダルで微調整 */
+    if(ocrImgCopy){
+      setTimeout(function(){
+        var srcImg=new Image();
+        srcImg.onload=function(){
+          var cropDataURL=ocrImgCopy;/* デフォルトは全体 */
+          if(ocrBbox&&ocrBbox.w>0&&ocrBbox.h>0){
+            /* bbox周辺を余裕をもって切り出し（左右60%・上下50%拡大） */
+            var padTop=0.3,padSide=0.8,padBot=0.3;
+            var sx=Math.max(0,ocrBbox.x-ocrBbox.w*padSide);
+            var sy=Math.max(0,ocrBbox.y-ocrBbox.h*padTop);
+            var sw=Math.min(1-sx,ocrBbox.w*(1+padSide*2));
+            var sh=Math.min(1-sy,ocrBbox.h*(1+padTop+padBot));
+            var px=Math.round(sx*srcImg.width);
+            var py=Math.round(sy*srcImg.height);
+            var pw=Math.round(sw*srcImg.width);
+            var ph=Math.round(sh*srcImg.height);
+            if(pw>50&&ph>50){
+              var c=document.createElement('canvas');
+              c.width=pw;c.height=ph;
+              c.getContext('2d').drawImage(srcImg,px,py,pw,ph,0,0,pw,ph);
+              cropDataURL=c.toDataURL('image/jpeg',0.95);
+            }
+          }
+          /* クロップモーダルを開く */
+          cropState.originalDataURL=cropDataURL;
+          cropState.zoom=1;cropState.offsetX=0;cropState.offsetY=0;
+          var cImg=document.getElementById('cropImage');
+          if(cImg){cImg.src=cropDataURL;cImg.onload=function(){updateCropPreview();};}
+          var slider=document.getElementById('zoomSlider');if(slider)slider.value='1';
+          var zv=document.getElementById('zoomValue');if(zv)zv.textContent='100%';
+          document.getElementById('cropModal').classList.add('open');
+          initCropDrag();
+        };
+        srcImg.src=ocrImgCopy;
+      },500);
+    }
+    try{checkScoreNotify();}catch(e){}
+  }else if(ocrType==='career'){
+    /* 職務経歴書 */
+    var sv=(document.getElementById('ocr_summary')||{}).value||'';if(sv){CD.summary=sv;CD.summaryAuto=false;}
+    var pv2=(document.getElementById('ocr_pr')||{}).value||'';if(pv2)CD.pr=pv2;
+    var skv=(document.getElementById('ocr_skills')||{}).value||'';if(skv)CD.skillsExp=skv;
+    var cv=(document.getElementById('ocr_certs2')||{}).value||'';
+    if(cv){
+      var cArr=cv.split(/\n/).filter(function(l){return l.trim();});
+      CD.certs=[];
+      for(var i=0;i<cArr.length;i++){
+        var cl=cArr[i].trim();
+        var cm=cl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(cm&&cm[3]){var mm=cm[2].length<2?'0'+cm[2]:cm[2];CD.certs.push({name:cm[3].replace(/\s*(取得|合格)\s*$/,'').trim(),date:cm[1]+'-'+mm});}
+        else if(cl.length>1){CD.certs.push({name:cl,date:''});}
+      }
+    }
+    /* 構造化works JSONがあれば使う */
+    var worksJsonEl=document.getElementById('ocr_works_json');
+    if(worksJsonEl){
+      try{
+        var worksData=JSON.parse(worksJsonEl.value);
+        if(worksData&&worksData.length){
+          CD.works=[];
+          for(var wi=0;wi<worksData.length;wi++){
+            var wd=worksData[wi];
+            var nw=makeEmptyWork();
+            nw.company=wd.company||'';
+            /* from/to パース */
+            if(wd.from){var fm=wd.from.match(/(\d{4})[年\-\/](\d{1,2})/);if(fm)nw.from=fm[1]+'-'+(fm[2].length<2?'0'+fm[2]:fm[2]);}
+            if(wd.to){var tm=wd.to.match(/(\d{4})[年\-\/](\d{1,2})/);if(tm)nw.to=tm[1]+'-'+(tm[2].length<2?'0'+tm[2]:tm[2]);}
+            nw.employment=wd.employment||'正社員';
+            nw.bizSummary=wd.bizSummary||'';
+            /* 業務内容 → jobContentFreeに保存 */
+            nw.jobContentFree=(wd.jobContent||'').replace(/\n/g,'、').replace(/^[・\s]+/,'').replace(/[・]/g,'、').replace(/、、+/g,'、').replace(/^、|、$/g,'');
+            /* 実績・成果 → results / 要因 → resultFactors */
+            nw.results=wd.results||'';
+            nw.resultFactors=wd.resultFactors||'';
+            /* 施工実績・プロジェクト */
+            if(wd.projects&&wd.projects.length){
+              nw.projects=[];
+              for(var pi=0;pi<wd.projects.length;pi++){
+                var sp=wd.projects[pi];
+                if(sp.name||sp.year){nw.projects.push({year:sp.year||'',name:sp.name||'',tou:sp.tou||'',cost:sp.cost||'',area:sp.area||'',struct:sp.struct||'',structFree:'',floors:sp.floors||''});}
+              }
+              if(!nw.projects.length)nw.projects=[{}];
+            }
+            CD.works.push(nw);
+          }
+        }
+      }catch(e){console.log('Works JSON parse error:',e);}
+    }else{
+      /* フォールバック: 旧形式（【会社名】区切り） */
+      var projV=(document.getElementById('ocr_projects')||{}).value||'';
+      if(projV){
+        var compBlocks=projV.split(/【/).filter(function(b){return b.trim();});
+        if(compBlocks.length>0){
+          CD.works=[];
+          for(var i=0;i<compBlocks.length;i++){
+            var block=compBlocks[i];
+            var compMatch=block.match(/^(.+?)】/);
+            var company=compMatch?compMatch[1].trim():'';
+            var detail=block.replace(/^.+?】\s*/,'').trim();
+            if(company){
+              var nw=makeEmptyWork();nw.company=company;nw.bizSummary=detail;
+              CD.works.push(nw);
+            }
+          }
+        }
+      }
+    }
+    if(CD.works&&CD.works.some(function(w){return w.company;}))persistCD();
+    closeOCR();
+    try{startCareer();CS=CM;drawCS();buildCP();}catch(e){}
+    try{checkScoreNotify();}catch(e){}
+  }else if(ocrType==='combined'){
+    /* ===== レジュメ（混合型）: RDとCD両方を反映 ===== */
+
+    /* --- RD部分 --- */
+    var nameVal=(document.getElementById('ocr_name')||{}).value||'';
+    if(nameVal){var parts=nameVal.split(/[\s　]+/);if(parts.length>=2){RD.sei=parts[0];RD.mei=parts.slice(1).join('');}else{RD.sei=nameVal;}}
+    var kanaVal=(document.getElementById('ocr_kana')||{}).value||'';
+    if(kanaVal){var kp=kanaVal.split(/[\s　]+/);if(kp.length>=2){RD.kanaSei=kp[0];RD.kanaMei=kp.slice(1).join('');}else{RD.kanaSei=kanaVal;}}
+    var bv=(document.getElementById('ocr_birth')||{}).value||'';
+    if(bv){var bm=bv.match(/(\d{4})[年\-\/](\d{1,2})[月\-\/]?(\d{0,2})/);if(bm){RD.birth=bm[1]+'-'+(bm[2].length<2?'0'+bm[2]:bm[2])+(bm[3]?'-'+(bm[3].length<2?'0'+bm[3]:bm[3]):'');}else{RD.birth=bv;}}
+    var gv=(document.getElementById('ocr_gender')||{}).value||'';if(gv)RD.gender=gv;
+    var postalV=(document.getElementById('ocr_postal')||{}).value||'';if(postalV)RD.zip=postalV.replace(/〒/g,'').trim();
+    var av=(document.getElementById('ocr_address')||{}).value||'';if(av)RD.address=av;
+    var akv=(document.getElementById('ocr_addressKana')||{}).value||'';if(akv)RD.addrKana=katakanaToHiragana(akv);
+    var pv=(document.getElementById('ocr_phone')||{}).value||'';if(pv)RD.phone=pv;
+    var ev=(document.getElementById('ocr_email')||{}).value||'';if(ev)RD.email=ev;
+    /* 学歴 */
+    var eduText=(document.getElementById('ocr_education')||{}).value||'';
+    if(eduText){
+      var eduLines=eduText.split(/\n/).filter(function(l){return l.trim()&&!l.trim().match(/^学歴$|^職歴$/);});
+      RD.education=[];
+      for(var i=0;i<eduLines.length;i++){
+        var el=eduLines[i].trim();
+        var em=el.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(em&&em[3]){
+          var mm=em[2].length<2?'0'+em[2]:em[2];
+          var schoolText=em[3].trim();
+          var typeMatch=schoolText.match(/\s*(入学|卒業|中退|中途退学|修了|転入学|編入学)\s*$/);
+          var edType=typeMatch?typeMatch[1]:'';
+          var edSchool=typeMatch?schoolText.replace(typeMatch[0],'').trim():schoolText;
+          var deptMatch=edSchool.match(/^(.+?)\s+([一-鿿]+学部.*)$/);
+          var dept='';
+          if(deptMatch){edSchool=deptMatch[1];dept=deptMatch[2];}
+          RD.education.push({school:edSchool,date:em[1]+'-'+mm,dept:dept,type:edType});
+        }
+        else if(el.length>2){RD.education.push({school:el,date:'',dept:'',type:''});}
+      }
+      if(!RD.education.length)RD.education=[{}];
+    }
+    /* 職歴 */
+    var workText=(document.getElementById('ocr_work')||{}).value||'';
+    if(workText){
+      var workLines=workText.split(/\n/).filter(function(l){return l.trim()&&!l.trim().match(/^学歴$|^職歴$|^以上$|^現在に至る$/);});
+      RD.work=[];
+      for(var i=0;i<workLines.length;i++){
+        var wl=workLines[i].trim();
+        var wm=wl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(wm&&wm[3]){
+          var mm=wm[2].length<2?'0'+wm[2]:wm[2];
+          var rest=wm[3].trim();
+          if(rest.match(/入社/)){
+            RD.work.push({company:rest.replace(/\s*(株式会社|有限会社|合同会社)?\s*入社\s*/g,function(m,p1){return p1||'';}).trim(),from:wm[1]+'-'+mm,to:'',reason:''});
+          }else if(rest.match(/退社|退職/)&&RD.work.length>0){
+            RD.work[RD.work.length-1].to=wm[1]+'-'+mm;
+            var reasonMatch=rest.match(/(一身上の都合により|会社都合により|契約期間満了により|定年により)?\s*(退職|退社)/);
+            if(reasonMatch&&reasonMatch[1])RD.work[RD.work.length-1].reason=reasonMatch[1]+(reasonMatch[2]||'退職');
+          }else if(!rest.match(/入社|退社|退職/)&&rest.length>2){
+            RD.work.push({company:rest,from:wm[1]+'-'+mm,to:'',reason:''});
+          }
+        }
+      }
+      if(!RD.work.length)RD.work=[{}];
+    }
+    /* 志望動機・本人希望・資格（RD側） */
+    var motVal=(document.getElementById('ocr_motivation')||{}).value||'';if(motVal)RD.motivation=motVal;
+    var hopeVal=(document.getElementById('ocr_hope')||{}).value||'';if(hopeVal)RD.hopeOther=hopeVal;
+    var certsVal=(document.getElementById('ocr_certs')||{}).value||'';
+    if(certsVal){
+      var cLines=certsVal.split(/\n/).filter(function(l){return l.trim();});
+      RD.certs=[];
+      for(var i=0;i<cLines.length;i++){
+        var cl=cLines[i].trim();
+        var cm=cl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(cm&&cm[3]){var mm=cm[2].length<2?'0'+cm[2]:cm[2];RD.certs.push({name:cm[3].replace(/\s*(取得|合格)\s*$/,'').trim(),date:cm[1]+'-'+mm});}
+        else if(cl.length>1){RD.certs.push({name:cl,date:''});}
+      }
+      if(!RD.certs.length)RD.certs=[{}];
+    }
+
+    /* --- CD部分 --- */
+    var sv=(document.getElementById('ocr_summary')||{}).value||'';if(sv){CD.summary=sv;CD.summaryAuto=false;}
+    var pv2=(document.getElementById('ocr_pr')||{}).value||'';if(pv2)CD.pr=pv2;
+    var skv=(document.getElementById('ocr_skills')||{}).value||'';if(skv)CD.skillsExp=skv;
+    var cv=(document.getElementById('ocr_certs2')||{}).value||'';
+    if(cv){
+      var cArr=cv.split(/\n/).filter(function(l){return l.trim();});
+      CD.certs=[];
+      for(var i=0;i<cArr.length;i++){
+        var cl=cArr[i].trim();
+        var cm=cl.match(/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?\s*(.*)/);
+        if(cm&&cm[3]){var mm=cm[2].length<2?'0'+cm[2]:cm[2];CD.certs.push({name:cm[3].replace(/\s*(取得|合格)\s*$/,'').trim(),date:cm[1]+'-'+mm});}
+        else if(cl.length>1){CD.certs.push({name:cl,date:''});}
+      }
+    }
+    /* 構造化works JSON（CD側） */
+    var worksJsonEl=document.getElementById('ocr_works_json');
+    if(worksJsonEl){
+      try{
+        var worksData=JSON.parse(worksJsonEl.value);
+        if(worksData&&worksData.length){
+          CD.works=[];
+          for(var wi=0;wi<worksData.length;wi++){
+            var wd=worksData[wi];
+            var nw=makeEmptyWork();
+            nw.company=wd.company||'';
+            if(wd.from){var fm=wd.from.match(/(\d{4})[年\-\/](\d{1,2})/);if(fm)nw.from=fm[1]+'-'+(fm[2].length<2?'0'+fm[2]:fm[2]);}
+            if(wd.to){var tm=wd.to.match(/(\d{4})[年\-\/](\d{1,2})/);if(tm)nw.to=tm[1]+'-'+(tm[2].length<2?'0'+tm[2]:tm[2]);}
+            nw.employment=wd.employment||'正社員';
+            nw.bizSummary=wd.bizSummary||'';
+            nw.jobContentFree=(wd.jobContent||'').replace(/\n/g,'、').replace(/^[・\s]+/,'').replace(/[・]/g,'、').replace(/、、+/g,'、').replace(/^、|、$/g,'');
+            nw.results=wd.results||'';
+            nw.resultFactors=wd.resultFactors||'';
+            /* 施工実績・プロジェクト */
+            if(wd.projects&&wd.projects.length){
+              nw.projects=[];
+              for(var pi=0;pi<wd.projects.length;pi++){
+                var sp=wd.projects[pi];
+                if(sp.name||sp.year){nw.projects.push({year:sp.year||'',name:sp.name||'',tou:sp.tou||'',cost:sp.cost||'',area:sp.area||'',struct:sp.struct||'',structFree:'',floors:sp.floors||''});}
+              }
+              if(!nw.projects.length)nw.projects=[{}];
+            }
+            CD.works.push(nw);
+          }
+        }
+      }catch(e){console.log('Combined works JSON parse error:',e);}
+    }
+
+    /* OCR画像・bbox退避（closeOCR前にコピー） */
+    var ocrImgCopy=ocrImages.length>0?ocrImages[0].dataURL:'';
+    var bboxEl=document.getElementById('ocr_photo_bbox');
+    var ocrBbox=null;
+    if(bboxEl){try{ocrBbox=JSON.parse(bboxEl.value);}catch(e){}}
+
+    /* 両方を保存 */
+    persistRD();
+    if(CD.works&&CD.works.some(function(w){return w.company;}))persistCD();
+    closeOCR();
+
+    /* 履歴書ウィザードを開いてStep1から表示 */
+    RS=1;goTo('pageResume');drawRS();updateA4();
+
+    /* AIが検出した写真周辺を切り出し → クロップモーダルで微調整 */
+    if(ocrImgCopy){
+      setTimeout(function(){
+        var srcImg=new Image();
+        srcImg.onload=function(){
+          var cropDataURL=ocrImgCopy;
+          if(ocrBbox&&ocrBbox.w>0&&ocrBbox.h>0){
+            var padTop=0.3,padSide=0.8,padBot=0.3;
+            var sx=Math.max(0,ocrBbox.x-ocrBbox.w*padSide);
+            var sy=Math.max(0,ocrBbox.y-ocrBbox.h*padTop);
+            var sw=Math.min(1-sx,ocrBbox.w*(1+padSide*2));
+            var sh=Math.min(1-sy,ocrBbox.h*(1+padTop+padBot));
+            var px=Math.round(sx*srcImg.width);
+            var py=Math.round(sy*srcImg.height);
+            var pw=Math.round(sw*srcImg.width);
+            var ph=Math.round(sh*srcImg.height);
+            if(pw>50&&ph>50){
+              var c=document.createElement('canvas');
+              c.width=pw;c.height=ph;
+              c.getContext('2d').drawImage(srcImg,px,py,pw,ph,0,0,pw,ph);
+              cropDataURL=c.toDataURL('image/jpeg',0.95);
+            }
+          }
+          cropState.originalDataURL=cropDataURL;
+          cropState.zoom=1;cropState.offsetX=0;cropState.offsetY=0;
+          var cImg=document.getElementById('cropImage');
+          if(cImg){cImg.src=cropDataURL;cImg.onload=function(){updateCropPreview();};}
+          var slider=document.getElementById('zoomSlider');if(slider)slider.value='1';
+          var zv=document.getElementById('zoomValue');if(zv)zv.textContent='100%';
+          document.getElementById('cropModal').classList.add('open');
+          initCropDrag();
+        };
+        srcImg.src=ocrImgCopy;
+      },500);
+    }
+    try{checkScoreNotify();}catch(e){}
+  }
+}
+
+function ocrRetry(){
+  document.getElementById('ocrStep1').style.display='block';
+  document.getElementById('ocrStep2').style.display='none';
+  document.getElementById('ocrStep3').style.display='none';
+  document.getElementById('ocrFileInput').value='';
+  document.getElementById('ocrPreviewArea').innerHTML='';
+}
+
 function closeCheck(){document.getElementById('checkModal').classList.remove('open');}
 function openCheck(mode){
   saveRS();
@@ -7272,20 +8281,23 @@ function openCheck(mode){
       if(w.gapNote){
         allHistRows.push(mkHistRow('','','（'+esc(w.gapNote)+'）'));
       }
+      /* 最後の会社かどうか判定（現在に至るは最後の会社のみ表示） */
+      var isLastCompany=true;
+      for(var li=i+1;li<RD.work.length;li++){if(RD.work[li].company){isLastCompany=false;break;}}
       if(compactWork){
         /* 1行まとめ: ○○株式会社 入社（2022年3月 一身上の都合により退職） */
         var companyText=esc(w.company)+' 入社';
         if(w.to){var td2=new Date(w.to+'-01T00:00:00');var ty=td2.getFullYear();var tm=td2.getMonth()+1;
         var reason=w.reason||'一身上の都合により退職';
         companyText+='（'+ty+'年'+tm+'月 '+reason+'）';}
-        else{companyText+='（現在に至る）';}
+        else if(isLastCompany){companyText+='（現在に至る）';}
         allHistRows.push(mkHistRow(fy,fm,companyText));
       }else{
         allHistRows.push(mkHistRow(fy,fm,esc(w.company)+' 入社'));
         if(w.to){var td2=new Date(w.to+'-01T00:00:00');var ty=td2.getFullYear();var tm=td2.getMonth()+1;
         var reason=w.reason||'一身上の都合により退職';
         allHistRows.push(mkHistRow(ty,tm,reason));}
-        else{allHistRows.push(mkHistRow('','','現在に至る'));}
+        else if(isLastCompany){allHistRows.push(mkHistRow('','','現在に至る'));}
       }
     }}
   }
@@ -7875,6 +8887,7 @@ function saveCS(){
     x=document.getElementById('csPR');if(x)CD.pr=x.value;
   }
   updateCA4();
+  var _sb=document.getElementById('scoreBar');if(_sb){var _sr=calcProfileScore();updateScoreBar(_sr);}
 }
 
 /* 自動 職務要約 生成 */
@@ -8631,6 +9644,28 @@ function buildWorkBlockChunks(w,isLast){
       if(p.structFree){var sfText=esc(p.structFree);var sfH=chWrapHeight(sfText,11.5,1.4,44)+1;chunks.push({html:'<div style="font-size:11.5px;padding-left:14px;line-height:1.4">'+sfText+'</div>',h:sfH,type:'detail'});}
     }
   }
+  /* ⑤b 実績・成果（OCR取得テキスト） */
+  if(w.results){
+    var rItems=w.results.split(/\n/).filter(function(l){return l.trim();});
+    var rHead='<div style="font-size:11.5px;margin-top:2px;line-height:1.4"><strong>【実績・成果】</strong></div>';
+    chunks.push({html:rHead,h:18,type:'detail'});
+    for(var ri=0;ri<rItems.length;ri++){
+      var rt='・'+esc(rItems[ri].replace(/^[・\s]+/,''));
+      var rtH=chWrapHeight(rt,11.5,1.4,44)+1;
+      chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;padding-left:10px;line-height:1.4">'+rt+'</div>',h:rtH,type:'detail'});
+    }
+  }
+  /* ⑤c 実績が出た要因（OCR取得テキスト） */
+  if(w.resultFactors){
+    var fItems=w.resultFactors.split(/\n/).filter(function(l){return l.trim();});
+    var fHead='<div style="font-size:11.5px;margin-top:2px;line-height:1.4"><strong>【実績が出た要因】</strong></div>';
+    chunks.push({html:fHead,h:18,type:'detail'});
+    for(var fi=0;fi<fItems.length;fi++){
+      var ft='・'+esc(fItems[fi].replace(/^[・\s]+/,''));
+      var ftH=chWrapHeight(ft,11.5,1.4,44)+1;
+      chunks.push({html:'<div style="font-size:11.5px;margin-top:1px;padding-left:10px;line-height:1.4">'+ft+'</div>',h:ftH,type:'detail'});
+    }
+  }
   /* ⑥ 転職理由（主な実績の下） */
   if(w.forwardReason||w.triggerId){
     var reasonLabel=(w.to)?'転職理由:':'次のキャリアへの意欲:';
@@ -8711,6 +9746,18 @@ function buildWorkBlockHTML(w,isLast){
       if(p.structFree)h+='<div style="font-size:13px;padding-left:16px;line-height:1.6">'+esc(p.structFree)+'</div>';
     }
   }
+  /* ⑤b 実績・成果（OCR） */
+  if(w.results){
+    var rItems=w.results.split(/\n/).filter(function(l){return l.trim();});
+    h+='<div style="font-size:13px;margin-top:5px"><strong>【実績・成果】</strong></div>';
+    for(var ri=0;ri<rItems.length;ri++)h+='<div style="font-size:13px;margin-top:2px;padding-left:12px;line-height:1.6">・'+esc(rItems[ri].replace(/^[・\s]+/,''))+'</div>';
+  }
+  /* ⑤c 実績が出た要因（OCR） */
+  if(w.resultFactors){
+    var fItems=w.resultFactors.split(/\n/).filter(function(l){return l.trim();});
+    h+='<div style="font-size:13px;margin-top:5px"><strong>【実績が出た要因】</strong></div>';
+    for(var fi=0;fi<fItems.length;fi++)h+='<div style="font-size:13px;margin-top:2px;padding-left:12px;line-height:1.6">・'+esc(fItems[fi].replace(/^[・\s]+/,''))+'</div>';
+  }
   /* 転職理由（修正5訂正: 主な実績の下に表示） */
   if(w.forwardReason||w.triggerId){
     var reasonLabel=(w.to)?'転職理由:':'次のキャリアへの意欲:';
@@ -8790,8 +9837,12 @@ function updateCA4(){
     var bodyH=chWrapHeight(body,11.5,1.45,48);
     stream.push({type:'section-body',html:bodyHtml,h:bodyH});
   }
+  if(CD.skillsExp)pushSection('■ 活かせる経験・知識・技術',CD.skillsExp,false);
   var certText='';
-  if(CD.certs&&CD.certs.length)certText=CD.certs.join('、');
+  if(CD.certs&&CD.certs.length){
+    var certNames=CD.certs.map(function(c){return typeof c==='string'?c:(c.name||'');}).filter(Boolean);
+    certText=certNames.join('、');
+  }
   if(certText)pushSection('■ 保有資格',certText,false);
   /* 受賞・表彰（入力がある場合のみ） */
   var awardLines=[];
@@ -8857,12 +9908,27 @@ function updateCA4(){
     }
     /* セクション見出しは本文と一緒に収まるかを先読みチェック（オーファン防止） */
     if(item.type==='section-header'){
-      var bodyItem=stream[i+1];
-      var pairH=item.h+(bodyItem&&bodyItem.type==='section-body'?bodyItem.h:0);
-      if(used+pairH>PAGE_H){
-        /* 見出し+本文が現ページに収まらない → ページ送り。ただし新ページにも収まらない巨大本文の場合は受け入れて分割 */
-        nextItemIdx=i; /* 次ページの startPage 用 */
+      /* 補足セクション群（活かせる経験・資格・自己PR等）のグループ改ページ判定:
+         最初のセクション見出しに来た時、残り全セクションの合計高さを計算。
+         現ページに収まらないが新規ページなら収まる場合、まとめてページ送り。
+         これにより「活かせる経験」だけ1ページ目末尾に孤立する問題を防ぐ。 */
+      var allSectionsH=0;
+      for(var si=i;si<stream.length;si++){
+        if(stream[si].type==='section-header'||stream[si].type==='section-body')allSectionsH+=stream[si].h;
+      }
+      var freshPageH=PAGE_H-19;/* ページ番号分のみ */
+      if(used+allSectionsH>PAGE_H&&allSectionsH<=freshPageH&&used>100){
+        /* 全セクションが現ページに収まらないが新ページなら収まる → まとめてページ送り */
+        nextItemIdx=i;
         pageBreak();
+      }else{
+        /* 個別セクションの通常オーファン防止 */
+        var bodyItem=stream[i+1];
+        var pairH=item.h+(bodyItem&&bodyItem.type==='section-body'?bodyItem.h:0);
+        if(used+pairH>PAGE_H){
+          nextItemIdx=i;
+          pageBreak();
+        }
       }
       bodyHtml+=item.html;
       used+=item.h;
@@ -9241,47 +10307,54 @@ async function genResumeXLSX(){
     ws.getCell('B15').value=RD.address||'';
     ws.getCell('B15').font={name:'HG正楷書体-PRO',size:14};
 
-    /* 学歴 header (row 26) + up to 1 entry at row 28 (expandable in pairs) */
-    ws.getCell('D26').value='学　歴';
-    var ed=RD.education||[];
-    var edRows=[28];
-    var eIdx=0;
-    for(var ei=0;ei<ed.length;ei++){
-      if(!ed[ei].school)continue;
-      if(eIdx>=edRows.length)break;
-      var eym=ed[ei].date?ed[ei].date.split('-'):['',''];
-      ws.getCell('B'+edRows[eIdx]).value=eym[0]?parseInt(eym[0]):'';
-      ws.getCell('C'+edRows[eIdx]).value=eym[1]?parseInt(eym[1]):'';
-      ws.getCell('D'+edRows[eIdx]).value=ed[ei].school+(ed[ei].dept?' '+ed[ei].dept:'')+(ed[ei].type?' '+ed[ei].type:'');
-      eIdx++;
+    /* 学歴・職歴を左右テーブルに動的配置 */
+    /* 左側データ行: 26,28,30,32,34,35,37,39,40,42 右側: 4,6,8,10,12,14 */
+    var allDataRows=[26,28,30,32,34,35,37,39,40,42];
+    var rightDataRows=[4,6,8,10,12,14];
+    var riCols={y:'L',m:'M',d:'N'}; /* 右側テーブルの列 */
+    var rowPtr=0;var rightPtr=0;var useRight=false;
+    function putRow(yr,mo,text){
+      if(!useRight&&rowPtr<allDataRows.length){
+        var rn=allDataRows[rowPtr];
+        ws.getCell('B'+rn).value=yr;ws.getCell('C'+rn).value=mo;ws.getCell('D'+rn).value=text;
+        rowPtr++;
+      }else{
+        useRight=true;
+        if(rightPtr<rightDataRows.length){
+          var rn=rightDataRows[rightPtr];
+          ws.getCell(riCols.y+rn).value=yr;ws.getCell(riCols.m+rn).value=mo;ws.getCell(riCols.d+rn).value=text;
+          rightPtr++;
+        }
+      }
     }
 
-    /* 職歴 header (row 30) + entries alternating 入社/退職 at 32,34,35,37,39 */
-    ws.getCell('D30').value='職　歴';
+    /* 学歴 */
+    putRow('','','学　歴');
+    var ed=RD.education||[];
+    for(var ei=0;ei<ed.length;ei++){
+      if(!ed[ei].school)continue;
+      var eym=ed[ei].date?ed[ei].date.split('-'):['',''];
+      var yr=eym[0]?parseInt(eym[0]):'';var mo=eym[1]?parseInt(eym[1]):'';
+      putRow(yr,mo,ed[ei].school+(ed[ei].dept?' '+ed[ei].dept:'')+(ed[ei].type?' '+ed[ei].type:''));
+    }
+
+    /* 職歴 */
+    putRow('','','職　歴');
     var wk=RD.work||[];
-    var wrRows=[32,34,35,37,39];
-    var wrIdx=0;
     for(var wi=0;wi<wk.length;wi++){
       if(!wk[wi].company)continue;
-      if(wrIdx>=wrRows.length)break;
       var fym=wk[wi].from?wk[wi].from.split('-'):['',''];
-      ws.getCell('B'+wrRows[wrIdx]).value=fym[0]?parseInt(fym[0]):'';
-      ws.getCell('C'+wrRows[wrIdx]).value=fym[1]?parseInt(fym[1]):'';
-      ws.getCell('D'+wrRows[wrIdx]).value=wk[wi].company+' 入社';
-      wrIdx++;
-      if(wk[wi].to&&wrIdx<wrRows.length){
+      putRow(fym[0]?parseInt(fym[0]):'',fym[1]?parseInt(fym[1]):'',wk[wi].company+' 入社');
+      if(wk[wi].to){
         var tym=wk[wi].to.split('-');
-        ws.getCell('B'+wrRows[wrIdx]).value=tym[0]?parseInt(tym[0]):'';
-        ws.getCell('C'+wrRows[wrIdx]).value=tym[1]?parseInt(tym[1]):'';
-        ws.getCell('D'+wrRows[wrIdx]).value=wk[wi].reason||'一身上の都合により退職';
-        wrIdx++;
+        putRow(tym[0]?parseInt(tym[0]):'',tym[1]?parseInt(tym[1]):'',wk[wi].reason||'一身上の都合により退職');
       }
     }
     var lastWork=wk[wk.length-1];
     if(lastWork&&lastWork.company&&!lastWork.to){
-      ws.getCell('D40').value='現在に至る';
+      putRow('','','現在に至る');
     }
-    ws.getCell('D42').value='以上';
+    putRow('','','以上');
 
     /* 免許・資格 (right side rows 18,21,22) — 結合セル・配置はテンプレートを維持、値のみ設定 */
     var allCerts=(RD.certs||[]).slice();
@@ -9398,7 +10471,11 @@ else if(pg==='pageCareer'){
   var cdStr=localStorage.getItem('kp_cd_'+CU.email);
   if(cdStr){try{CD=JSON.parse(cdStr);}catch(e){}}
   drawCS();updateCA4();goTo('pageCareer');
-}else{goTo('pageDash');}
+}else{
+  var cdStr2=localStorage.getItem('kp_cd_'+CU.email);
+  if(cdStr2){try{CD=JSON.parse(cdStr2);}catch(e){}}
+  goTo('pageDash');setTimeout(checkScoreNotify,300);
+}
 }catch(ex){}})();
 </script>
 
