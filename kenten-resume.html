@@ -99,7 +99,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
 .photo-box .placeholder{color:#aaa;font-size:12px;text-align:center;line-height:1.4}
 
 /* Photo Crop Modal */
-.crop-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center}
+.crop-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center}
 .crop-modal.open{display:flex}
 .crop-container{background:#fff;border-radius:8px;padding:20px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto}
 .crop-title{font-size:16px;font-weight:bold;margin-bottom:16px;color:#333}
@@ -299,12 +299,19 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
           <div><div style="font-weight:bold;font-size:13px">レジュメ</div><div style="font-size:10px;color:#999">混合型・一体型</div></div>
         </label>
       </div>
-      <div id="ocrDropZone" style="border:2px dashed #ccc;border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s;background:#fafafa">
-        <div style="font-size:36px;margin-bottom:8px">📷</div>
-        <div style="font-size:14px;color:#666">写真をドラッグ＆ドロップ<br>または<span style="color:#2BA84A;font-weight:bold">タップして選択</span></div>
-        <div style="font-size:11px;color:#aaa;margin-top:8px">JPG / PNG 対応（複数ページ可）</div>
-        <input type="file" id="ocrFileInput" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div id="ocrDropZone" style="flex:1;border:2px dashed #ccc;border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s;background:#fafafa">
+          <div style="font-size:36px;margin-bottom:8px">🖼️</div>
+          <div style="font-size:14px;color:#666">画像をドラッグ＆ドロップ<br>または<span style="color:#2BA84A;font-weight:bold">タップして選択</span></div>
+          <input type="file" id="ocrFileInput" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple style="display:none">
+        </div>
+        <div onclick="openOcrCamera()" style="flex:1;border:2px dashed #ccc;border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s;background:#fafafa;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-size:36px;margin-bottom:8px">📷</div>
+          <div style="font-size:14px;color:#666"><span style="color:#2BA84A;font-weight:bold">カメラで撮影</span></div>
+        </div>
       </div>
+      <div style="font-size:11px;color:#e65100;margin-bottom:4px">※ 証明写真がある場合は、1番最初にアップロードしてください</div>
+      <div style="font-size:11px;color:#aaa">JPG / PNG 対応（複数ページ可）</div>
       <div id="ocrThumbList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
       <div id="ocrStartWrap" style="display:none;margin-top:12px;text-align:center">
         <span id="ocrFileCount" style="font-size:13px;color:#555"></span>
@@ -489,11 +496,11 @@ body{font-family:'Hiragino Kaku Gothic ProN','Segoe UI','Meiryo',sans-serif;back
 <!-- Camera Capture Modal -->
 <div class="crop-modal" id="cameraModal">
   <div class="crop-container" style="max-width:480px">
-    <div class="crop-title">📷 カメラで証明写真を撮影</div>
+    <div class="crop-title" id="cameraTitleText">📷 カメラで証明写真を撮影</div>
     <div style="position:relative;width:100%;max-width:400px;margin:0 auto">
       <video id="cameraVideo" autoplay playsinline style="width:100%;border-radius:8px;background:#000;transform:scaleX(-1)"></video>
-      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:80%;aspect-ratio:3/4;border:2px dashed rgba(255,255,255,0.7);border-radius:8px;pointer-events:none"></div>
-      <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:11px;text-shadow:0 1px 3px rgba(0,0,0,.8);pointer-events:none">顔をガイド枠に合わせてください</div>
+      <div id="cameraGuideFrame" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:80%;aspect-ratio:3/4;border:2px dashed rgba(255,255,255,0.7);border-radius:8px;pointer-events:none"></div>
+      <div id="cameraGuideText" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:11px;text-shadow:0 1px 3px rgba(0,0,0,.8);pointer-events:none">顔をガイド枠に合わせてください</div>
     </div>
     <div class="crop-buttons" style="margin-top:12px">
       <button type="button" class="crop-confirm" onclick="takeCameraPhoto()">📷 撮影する</button>
@@ -10489,6 +10496,12 @@ function openCameraCapture(){
     alert('このブラウザはカメラ機能に対応していません。ファイルから選択してください。');
     return;
   }
+  ocrCameraMode=false;
+  /* 証明写真モード: ガイド枠・テキスト表示 */
+  var gf=document.getElementById('cameraGuideFrame');if(gf)gf.style.display='';
+  var gt=document.getElementById('cameraGuideText');if(gt)gt.style.display='';
+  var tt=document.getElementById('cameraTitleText');if(tt)tt.textContent='📷 カメラで証明写真を撮影';
+  video.style.transform='scaleX(-1)';
   modal.classList.add('open');
   navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
   .then(function(stream){
@@ -10501,14 +10514,60 @@ function openCameraCapture(){
   });
 }
 function closeCameraCapture(){
+  ocrCameraMode=false;
   if(cameraStream){
     cameraStream.getTracks().forEach(function(t){t.stop();});
     cameraStream=null;
   }
   var video=document.getElementById('cameraVideo');
-  if(video)video.srcObject=null;
+  if(video){video.srcObject=null;video.style.transform='scaleX(-1)';}
+  /* ガイド枠を復元 */
+  var gf=document.getElementById('cameraGuideFrame');if(gf)gf.style.display='';
+  var gt=document.getElementById('cameraGuideText');if(gt)gt.style.display='';
+  var tt=document.getElementById('cameraTitleText');if(tt)tt.textContent='📷 カメラで証明写真を撮影';
   document.getElementById('cameraModal').classList.remove('open');
 }
+/* === OCR用カメラ撮影 === */
+var ocrCameraMode=false;
+function openOcrCamera(){
+  var modal=document.getElementById('cameraModal');
+  var video=document.getElementById('cameraVideo');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    alert('このブラウザはカメラ機能に対応していません。画像ファイルから選択してください。');
+    return;
+  }
+  ocrCameraMode=true;
+  /* OCRモード: ガイド枠・テキスト非表示、タイトル変更 */
+  var gf=document.getElementById('cameraGuideFrame');if(gf)gf.style.display='none';
+  var gt=document.getElementById('cameraGuideText');if(gt)gt.style.display='none';
+  var tt=document.getElementById('cameraTitleText');if(tt)tt.textContent='📷 書類をカメラで撮影';
+  modal.classList.add('open');
+  /* 書類撮影は背面カメラ優先、なければ前面カメラ */
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}}})
+  .then(function(stream){
+    cameraStream=stream;
+    video.srcObject=stream;
+    /* 背面カメラの場合はミラーを解除 */
+    video.style.transform='none';
+  })
+  .catch(function(err){
+    /* 背面カメラ失敗→前面カメラにフォールバック */
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:960}}})
+    .then(function(stream){
+      cameraStream=stream;
+      video.srcObject=stream;
+      video.style.transform='scaleX(-1)';
+    })
+    .catch(function(err2){
+      alert('カメラへのアクセスが許可されませんでした。');
+      ocrCameraMode=false;
+      closeCameraCapture();
+    });
+  });
+}
+
+/* 既存のtakeCameraPhotoを拡張: OCRモードならocrImagesに追加 */
+var _origTakeCameraPhoto=typeof takeCameraPhoto==='function'?takeCameraPhoto:null;
 function takeCameraPhoto(){
   var video=document.getElementById('cameraVideo');
   var canvas=document.getElementById('cameraCanvas');
@@ -10516,14 +10575,23 @@ function takeCameraPhoto(){
   canvas.width=video.videoWidth;
   canvas.height=video.videoHeight;
   var ctx=canvas.getContext('2d');
-  /* Mirror the image (front camera is mirrored in CSS) */
-  ctx.translate(canvas.width,0);
-  ctx.scale(-1,1);
+  /* ミラー判定 */
+  if(video.style.transform==='scaleX(-1)'){
+    ctx.translate(canvas.width,0);
+    ctx.scale(-1,1);
+  }
   ctx.drawImage(video,0,0);
   ctx.setTransform(1,0,0,1,0,0);
-  var dataURL=canvas.toDataURL('image/png');
+  var dataURL=canvas.toDataURL('image/jpeg',0.9);
+  var wasOcrMode=ocrCameraMode;
   closeCameraCapture();
-  /* Feed into existing crop workflow */
+
+  if(wasOcrMode){
+    ocrImages.push({dataURL:dataURL,name:'camera_'+Date.now()+'.jpg'});
+    ocrUpdateThumbs();
+    return;
+  }
+  /* 通常の証明写真モード */
   cropState.originalDataURL=dataURL;
   cropState.zoom=1;
   cropState.offsetX=0;
